@@ -1,0 +1,6 @@
+[package]
+name = "conlang_fmt"
+version = "0.1.0"
+authors = ["Emily Crandall Fleischman <emilycf@mit.edu>"]
+
+[dependencies]
