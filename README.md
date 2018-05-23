@@ -27,7 +27,7 @@ Headers are numbered by default.
 #### Table of contents
 
 A table of contents can be inserted with a block consisting entirely of the
-text `[TOC]`.
+text `:toc:`.
 [TODO: parameters for table of contents]
 
 #### Bullet lists
@@ -47,7 +47,10 @@ They are otherwise identical to bullet lists.
 
 #### Tables
 
-[TODO: define syntax for tables]
+Tables are denoted by a block starting with `:table:`.
+Rows are denoted by starting a line with `::`.
+Cells within a row are delimited by `|`.
+[TODO: parameters for tables and cells]
 
 #### Glosses
 
