@@ -12,6 +12,11 @@ expect it to do everything.
 > Since no code has been written yet, this section will define the desired
 > features and syntax for the program.
 
+### Parameters
+
+Many syntax elements can take optional parameters, which are denoted by a
+comma-separated list surrounded by square brackets.
+
 ### Blocks
 
 A block is a paragraph-level element, such as a section header, a table, or a
@@ -22,13 +27,34 @@ All blocks must be separated by blank lines, with no exceptions.
 
 Section headers are denoted by one or more `#` characters, as in Markdown.
 Headers are numbered by default.
-[TODO: customization for formatting, presence of section numbers]
+Parameters are placed immediately after the last `#`.
+
+##### Parameters
+
+- `id`: The ID to assign to the heading.
+  Defaults to the text of the heading, with spaces replaced by dashes, and a
+  number appended to ensure uniqueness.
+- `nonumber`: Do not number this heading.
+  If set, the counter for this section level will not increase, and the counter
+  for lower levels will not be reset.
+  > Note: this parameter should only be used to disable numbering for a single
+  > heading.
+  > Use CSS to disable numbering for an entire level of headings.
+- `notoc`: Do not include this heading in the table of contents.
+  > Note: this parameter should only be used to prevent a single heading from
+  > appearing in the table of contents.
+  > Use parameters on the table of contents itself to hide an entire level of
+  > headings.
 
 #### Table of contents
 
 A table of contents can be inserted with a block consisting entirely of the
-text `:toc:`.
-[TODO: parameters for table of contents]
+text `:toc:`, optionally followed by parameters.
+
+##### Parameters
+
+- `maxlevel` (default: 6): The maximum level of section headings to include
+  in the table of contents.
 
 #### Bullet lists
 
@@ -38,23 +64,68 @@ No characters other than `-` are allowed to start list items.
 If a list item is too long to fit on a single line, it can be wrapped by
 indenting any following lines by two (or more) spaces.
 A list item can contain a list, by indenting two (or more) spaces.
+> TODO: Where should parameters go
 
 #### Numbered lists
 
-Numbered lists are denoted by lines starting with `!` [subject to change]
-followed by one ore more whitespace characters.
+Numbered lists are denoted by lines starting with `!` followed by one ore more
+whitespace characters.
 They are otherwise identical to bullet lists.
+> Note: this notation is subject to change.
 
 #### Tables
 
-Tables are denoted by a block starting with `:table:`.
+Tables are denoted by a block starting with `:table:`, optionally followed by
+parameters, and a title for the table.
+Tables are automatically numbered.
 Rows are denoted by starting a line with `::`.
 Cells within a row are delimited by `|`.
-[TODO: parameters for tables and cells]
+Parameters for a row are placed immediately after the `::`.
+Parameters for a cell are placed immediately after the `|`.
+> TODO: Where should column parameters go
+
+##### Parameters
+
+###### Table
+
+- `id`: The ID to assign to the table.
+  If the table has a title, defaults to `table-` plus the title, with spaces
+  replaced by dashes, and with a number appended to ensure uniqueness.
+  Otherwise, defaults to `table-n`, where _n_ is the number of the table.
+- `nonumber`: Do not number this table.
+  If set, and the `id` parameter is not set, and the table lacks a title, the
+  table's ID will be set to `table-nonumber`, with a number appended to ensure
+  uniqueness.
+- `class`: The CSS classes to apply to this table.
+
+###### Column
+
+- `header`: If set, the row will be considered a header row, and the cells will
+  be `<th scope="row">` elements.
+- `class`: The CSS classes to apply to this column.
+  Because columns are not logical parent elements of cells, these classes will
+  be added to each cell in the column.
+  These classes will not be applied to any multi-column cells.
+
+###### Row
+
+- `header`: If set, the row will be considered a header row, and the cells will
+  be `<th scope="col">` elements.
+- `class`: The CSS classes to apply to this row.
+
+###### Cell
+
+- `cols` (default: 1): The number of columns this cell should span.
+- `rows` (default: 1): The number of rows this cell should span.
+  In subsequent rows, blank cells should be included where they would be
+  covered by an earlier multi-row cell.
+  Including any text or parameters in these cells will trigger a warning.
+- `class`: The CSS classes to apply to this cell.
+  Styling individual cells this way should be done sparingly.
 
 #### Glosses
 
-[TODO: define syntax for glosses]
+> TODO: define syntax for glosses
 
 ### Inline elements
 
@@ -91,8 +162,8 @@ Normal text, <span class="conlang">conlang text</span> <span class="my-class ano
 
 #### Text replacements
 
-[TODO: define syntax for text replacements]
+> TODO: define syntax for text replacements
 
 #### Cross references
 
-[TODO: define syntax for cross references]
+> TODO: define syntax for cross references
