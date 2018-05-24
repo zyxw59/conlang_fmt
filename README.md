@@ -112,6 +112,8 @@ Parameters for a cell are placed immediately after the `|`.
 - `header`: If set, the row will be considered a header row, and the cells will
   be `<th scope="col">` elements.
 - `class`: The CSS classes to apply to this row.
+  These classes will be applied to the containing `<tr>` element, and _do_
+  apply to multi-row cells.
 
 ###### Cell
 
