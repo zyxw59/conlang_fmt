@@ -166,32 +166,24 @@ Inline elements can be included inline in text.
 
 #### Formatting
 
-Emphasis (usually displayed as italics) is indicated by surrounding the text
-with `*`.
-Strong emphasis (usually displayed as bold) is indicated by surrounding the
-text with `**`.
-Italics (formatting only, without semantics) is indicated by surrounding the
-text with `_` (a single underscore).
-Bold (formatting only, without semantics) is indicated by surrounding the
-text with `__` (two underscores).
-Small caps is indicated by surrounding the text with `^^`.
+- Emphasis (usually displayed as italics) is indicated by surrounding the text
+  with `*`.
+- Strong emphasis (usually displayed as bold) is indicated by surrounding the
+  text with `**`.
+- Italics (formatting only, without semantics) is indicated by surrounding the
+  text with `_` (a single underscore).
+- Bold (formatting only, without semantics) is indicated by surrounding the
+  text with `__` (two underscores).
+- Small caps is indicated by surrounding the text with `^^`.
+- A generic `<span>` element is indicated by surrounding the text with `` ` ``.
 
-#### Custom `span` classes
+In each of these cases, parameters come directly after the closing delimiter.
 
-To generate a `<span>` element with custom CSS classes, surround the text with
-`` ` ``, followed by `[` + _list of classes_ + `]`.
-When used without a trailing `[…]`, the span will have the class `conlang`.
+##### Parameters
 
-##### Example
-
-The following snippet:
-```
-Normal text, `conlang text` `custom classes`[my-class another-class].
-```
-will produce the HTML output:
-```html
-Normal text, <span class="conlang">conlang text</span> <span class="my-class another-class">custom classes</span>.
-```
+- `class`: The CSS classes to apply to this span.
+  In the case of a generic span, this defaults to `conlang`.
+  Otherwise, defaults to none.
 
 #### Text replacements
 
