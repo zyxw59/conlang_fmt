@@ -127,7 +127,38 @@ Parameters for a cell are placed immediately after the `|`.
 
 #### Glosses
 
-> TODO: define syntax for glosses
+Glosses are denoted by a block starting with `:gloss:`, optionally followed by
+parameters, and a title for the gloss.
+Glosses are automatically numbered.
+New lines of the gloss are denoted by starting a line with `::`.
+A gloss line consists of a series of space-separated words.
+If a logical word contains a space, it can be surrounded by curly braces.
+In the output, a space will be inserted between two gloss elements unless the
+first one ends with a `-` character, or the second one begins with a `-`
+character.
+Parameters for a line are placed immediately after the `::`.
+
+##### Parameters
+
+###### Gloss
+
+- `id`: The ID to assign to the gloss.
+  If the gloss has a title, defaults to `gloss-` plus the title, with spaces
+  replaced by dashes, and with a number appended to ensure uniqueness.
+  Otherwise, defaults to `gloss-n`, where _n_ is the number of the gloss.
+- `nonumber`: Do not number this gloss.
+  If set, and the `id` parameter is not set, and the gloss lacks a title, the
+  gloss's ID will be set to `gloss-nonumber`, with a number appended to ensure
+  uniqueness.
+- `class`: The CSS classes to apply to this gloss.
+
+###### Line
+
+- `nosplit`: Do not split this line up into words.
+  The line will not be considered a part of the gloss.
+  `nosplit` lines cannot come in between regular gloss lines -- they must all
+  come at the beginning and/or the end of the gloss.
+- `class`: The CSS classes to apply to this line.
 
 ### Inline elements
 
