@@ -196,7 +196,14 @@ In each of these cases, parameters come directly after the closing delimiter.
 
 #### Text replacements
 
-> TODO: define syntax for text replacements
+Text replacements can be defined in a block starting with `:replace:`, followed
+by a list of replacements.
+Each replacement in the list should consist of the identifier for the
+replacement, surrounded by `:`, followed by the replacement text, which may
+itself contain replacements (or any other inline formatting).
+In the text, a replacement is denoted by the replacement's identifier,
+surrounded by `:`.
+Text replacements do not take any parameters.
 
 #### Cross references
 
