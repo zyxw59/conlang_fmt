@@ -207,4 +207,15 @@ Text replacements do not take any parameters.
 
 #### Cross references
 
-> TODO: define syntax for cross references
+Cross references are denoted with `:ref:`.
+The parameters come immediately afterwards.
+
+##### Parameters
+
+- `ref`: The ID to reference in the document.
+  The text for the reference will automatically be set based on the type of
+  element it refers to: "section", "table", or "gloss"; followed by the number
+  of that element.
+  If the reference points to an element with the `nonumber` parameter, then a
+  warning will be raised, and the text will simply be the type of the element.
+- `class`: The CSS classes to apply to this reference.
