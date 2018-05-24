@@ -17,6 +17,13 @@ expect it to do everything.
 Many syntax elements can take optional parameters, which are denoted by a
 comma-separated list surrounded by square brackets.
 
+The `class` parameter can be abbreviated by leaving a space-separated list of
+classes as the final parameter.
+This does not work when only one class is included and that class conflicts
+with a named parameter of that element.
+For example, a heading with the parameter string `[notoc]` would be parsed as
+having the `notoc` parameter, rather than a class of `notoc`.
+
 ### Blocks
 
 A block is a paragraph-level element, such as a section header, a table, or a
@@ -34,6 +41,7 @@ Parameters are placed immediately after the last `#`.
 - `id`: The ID to assign to the heading.
   Defaults to the text of the heading, with spaces replaced by dashes, and a
   number appended to ensure uniqueness.
+- `class`: The CSS classes to apply to this heading.
 - `nonumber`: Do not number this heading.
   If set, the counter for this section level will not increase, and the counter
   for lower levels will not be reset.
@@ -53,6 +61,7 @@ text `:toc:`, optionally followed by parameters.
 
 ##### Parameters
 
+- `class`: The CSS classes to apply to the table of contents.
 - `maxlevel` (default: 6): The maximum level of section headings to include
   in the table of contents.
 
