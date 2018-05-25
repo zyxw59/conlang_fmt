@@ -209,3 +209,15 @@ Text replacements do not take any parameters.
 
   This parameter can be abbreviated; the first parameter to a `:ref:` will be
   interpreted as a `ref` parameter rather than a `class` parameter.
+
+#### External links (`:link:`)
+
+##### Parameters
+
+- `url`: The URL to link to.
+  This parameter is required.
+
+  This parameter can be abbreviated; the first parameter to a `:link:` will be
+  interpreted as a `url` parameter rather than a `class` parameter.
+- `title`: The text to display for the link.
+  Defaults to the value of the `url` parameter.
