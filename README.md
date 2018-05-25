@@ -197,9 +197,15 @@ Text replacements do not take any parameters.
 
 #### Cross references (`:ref:`)
 
-The directive must be followed by the ID of a block in the document.
-The text for the reference will automatically be set based on the type of
-element it refers to: "section", "table", or "gloss"; followed by the number of
-that element.
-If the reference points to an element with the `nonumber` parameter, then a
-warning will be raised, and the text will simply be the type of the element.
+##### Parameters
+
+- `ref`: The ID to reference in the document.
+  This parameter is required.
+  The text for the reference will automatically be set based on the type of
+  element it refers to: "section", "table", or "gloss"; followed by the number
+  of that element.
+  If the reference points to an element with the `nonumber` parameter, then a
+  warning will be raised, and the text will simply be the type of the element.
+
+  This parameter can be abbreviated; the first parameter to a `:ref:` will be
+  interpreted as a `ref` parameter rather than a `class` parameter.
