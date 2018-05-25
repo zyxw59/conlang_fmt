@@ -25,7 +25,7 @@ impl<B> Input<B> where B: BufRead {
     /// Blocks are delimited by blank (all-whitespace) lines.
     ///
     /// An empty block signifies that the end of the input has been reached.
-    pub fn next_block(&mut self) -> Result<Drain<String>, Error> {
+    pub fn next_block(&mut self) -> Result<Block, Error> {
         while let Some(line) = self.lines.next() {
             // unwrap line
             let line = line.with_context(|e| ErrorKind::from_io(e, self.line_number))?;
@@ -44,6 +44,41 @@ impl<B> Input<B> where B: BufRead {
         }
         // if we broke earlier, or if we've reached the end of the text, return the iterator.
         // we use `drain` so that we can reuse `buffer`.
-        Ok(self.buffer.drain(..))
+        Ok(Block {
+            len: self.buffer.len(),
+            start: self.line_number - self.buffer.len(),
+            iter: self.buffer.drain(..),
+        })
+    }
+}
+
+/// An iterator over the lines of a block.
+pub struct Block<'a> {
+    iter: Drain<'a, String>,
+    len: usize,
+    start: usize,
+}
+
+impl<'a> Block<'a> {
+    /// Returns the length of the block, in number of lines.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Returns the starting line number of the block.
+    pub fn start(&self) -> usize {
+        self.start
+    }
+}
+
+impl<'a> Iterator for Block<'a> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<String> {
+        self.iter.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
     }
 }
