@@ -16,13 +16,35 @@ expect it to do everything.
 
 Many syntax elements can take optional parameters, which are denoted by a
 comma-separated list surrounded by square brackets.
+If a parameter takes an argument, it is denoted by an equals sign followed by
+the value of the argument.
 
-The `class` parameter can be abbreviated by leaving a space-separated list of
-classes as the final parameter.
-This does not work when only one class is included and that class conflicts
-with a named parameter of that element.
-For example, a heading with the parameter string `[notoc]` would be parsed as
-having the `notoc` parameter, rather than a class of `notoc`.
+#### Common Parameters
+
+- `class`: A list of CSS classes to apply to the element.
+  The `class` parameter can be abbreviated by leaving a space-separated list of
+  classes as the final parameter.
+  This does not work when only one class is included and that class conflicts
+  with a named parameter of that element.
+  For example, a heading with the parameter string `[notoc]` would be parsed as
+  having the `notoc` parameter, rather than a class of `notoc`.
+- `id`: The ID for the element.
+  This parameter is only allowed on block-level directives.
+  By default, the ID is composed of three elements, joined by `-`:
+  - The type of the block (e.g. `section`, `table`, `gloss`)
+  - The title of the block, if it has one, with spaces replaced by `-`.
+    Otherwise, if the block is numbered, the number of the block.
+    If the block lacks both a title and a number, then simply `nonumber`.
+  - A numeric suffix to ensure uniqueness.
+    If the ID is already unique, this element will be ommitted, including the
+    preceding `-`.
+
+### Directives
+
+A directive is indicated by text surrounded by colons, with the exception of
+headings (indicated by a series of `#` characters), and some formatting
+commands (indicated by surrounding text with various delimiters).
+The parameters for a directive go directly after the second colon.
 
 ### Blocks
 
@@ -38,10 +60,6 @@ Parameters are placed immediately after the last `#`.
 
 ##### Parameters
 
-- `id`: The ID to assign to the heading.
-  Defaults to the text of the heading, with spaces replaced by dashes, and a
-  number appended to ensure uniqueness.
-- `class`: The CSS classes to apply to this heading.
 - `nonumber`: Do not number this heading.
   If set, the counter for this section level will not increase, and the counter
   for lower levels will not be reset.
@@ -54,38 +72,30 @@ Parameters are placed immediately after the last `#`.
   > Use parameters on the table of contents itself to hide an entire level of
   > headings.
 
-#### Table of contents
+#### Table of contents (`:toc:`)
 
-A table of contents can be inserted with a block consisting entirely of the
-text `:toc:`, optionally followed by parameters.
+The directive can optionally be followed by a title for the table of contents,
+which defaults to "Table of contents".
 
 ##### Parameters
 
-- `class`: The CSS classes to apply to the table of contents.
 - `maxlevel` (default: 6): The maximum level of section headings to include
   in the table of contents.
 
-#### Bullet lists
+#### Lists (`:list:`)
 
-Bullet lists are denoted by lines starting with `-` followed by one or more
-whitespace characters.
-No characters other than `-` are allowed to start list items.
-If a list item is too long to fit on a single line, it can be wrapped by
-indenting any following lines by two (or more) spaces.
-A list item can contain a list, by indenting two (or more) spaces.
-> TODO: Where should parameters go
+Each element of a list is denoted by a line starting with `::`.
+A list item can contain a list, by indenting the entire sub-list by two (or
+more) spaces.
+By default, lists are unordered lists (bullet points).
 
-#### Numbered lists
+##### Parameters
 
-Numbered lists are denoted by lines starting with `!` followed by one ore more
-whitespace characters.
-They are otherwise identical to bullet lists.
-> Note: this notation is subject to change.
+- `ordered`: Make the list an ordered list.
 
-#### Tables
+#### Tables (`:table:`)
 
-Tables are denoted by a block starting with `:table:`, optionally followed by
-parameters, and a title for the table.
+The directive can optionally be followed by a title for the table.
 Tables are automatically numbered.
 Rows are denoted by starting a line with `::`.
 Cells within a row are delimited by `|`.
@@ -97,32 +107,22 @@ Parameters for a cell are placed immediately after the `|`.
 
 ###### Table
 
-- `id`: The ID to assign to the table.
-  If the table has a title, defaults to `table-` plus the title, with spaces
-  replaced by dashes, and with a number appended to ensure uniqueness.
-  Otherwise, defaults to `table-n`, where _n_ is the number of the table.
 - `nonumber`: Do not number this table.
-  If set, and the `id` parameter is not set, and the table lacks a title, the
-  table's ID will be set to `table-nonumber`, with a number appended to ensure
-  uniqueness.
-- `class`: The CSS classes to apply to this table.
 
 ###### Column
 
 - `header`: If set, the row will be considered a header row, and the cells will
   be `<th scope="row">` elements.
-- `class`: The CSS classes to apply to this column.
-  Because columns are not logical parent elements of cells, these classes will
-  be added to each cell in the column.
-  These classes will not be applied to any multi-column cells.
+> Note about `class`: Because columns are not logical parent elements of cells,
+> classes will be added to each cell in the column.
+> These classes will not be applied to any multi-column cells.
 
 ###### Row
 
 - `header`: If set, the row will be considered a header row, and the cells will
   be `<th scope="col">` elements.
-- `class`: The CSS classes to apply to this row.
-  These classes will be applied to the containing `<tr>` element, and _do_
-  apply to multi-row cells.
+> Note about `class`: Classes are applied to the containing `<tr>`
+> element, and _do_ apply to multi-row cells starting in this row.
 
 ###### Cell
 
@@ -131,13 +131,10 @@ Parameters for a cell are placed immediately after the `|`.
   In subsequent rows, blank cells should be included where they would be
   covered by an earlier multi-row cell.
   Including any text or parameters in these cells will trigger a warning.
-- `class`: The CSS classes to apply to this cell.
-  Styling individual cells this way should be done sparingly.
 
 #### Glosses
 
-Glosses are denoted by a block starting with `:gloss:`, optionally followed by
-parameters, and a title for the gloss.
+The directive can optionally be followed by a title for the gloss.
 Glosses are automatically numbered.
 New lines of the gloss are denoted by starting a line with `::`.
 A gloss line consists of a series of space-separated words.
@@ -151,15 +148,10 @@ Parameters for a line are placed immediately after the `::`.
 
 ###### Gloss
 
-- `id`: The ID to assign to the gloss.
-  If the gloss has a title, defaults to `gloss-` plus the title, with spaces
-  replaced by dashes, and with a number appended to ensure uniqueness.
-  Otherwise, defaults to `gloss-n`, where _n_ is the number of the gloss.
 - `nonumber`: Do not number this gloss.
   If set, and the `id` parameter is not set, and the gloss lacks a title, the
   gloss's ID will be set to `gloss-nonumber`, with a number appended to ensure
   uniqueness.
-- `class`: The CSS classes to apply to this gloss.
 
 ###### Line
 
@@ -167,7 +159,6 @@ Parameters for a line are placed immediately after the `::`.
   The line will not be considered a part of the gloss.
   `nosplit` lines cannot come in between regular gloss lines -- they must all
   come at the beginning and/or the end of the gloss.
-- `class`: The CSS classes to apply to this line.
 
 ### Inline elements
 
@@ -190,32 +181,25 @@ In each of these cases, parameters come directly after the closing delimiter.
 
 ##### Parameters
 
-- `class`: The CSS classes to apply to this span.
-  In the case of a generic span, this defaults to `conlang`.
-  Otherwise, defaults to none.
+> Note about `class`: In the case of a generic span, this defaults to
+> `conlang`.
+> Otherwise, defaults to none.
 
-#### Text replacements
+#### Text replacements (`:replace:`)
 
-Text replacements can be defined in a block starting with `:replace:`, followed
-by a list of replacements.
-Each replacement in the list should consist of the identifier for the
-replacement, surrounded by `:`, followed by the replacement text, which may
+A list of text replacements can be defined in `:replace:` block.
+Each replacement in the list should consist of a directive to be used for the
+replacement, followed by the replacement text, which may
 itself contain replacements (or any other inline formatting).
-In the text, a replacement is denoted by the replacement's identifier,
-surrounded by `:`.
+In the text, a replacement is denoted by the directive declared in the
+`:replace:` block.
 Text replacements do not take any parameters.
 
-#### Cross references
+#### Cross references (`:ref:`)
 
-Cross references are denoted with `:ref:`.
-The parameters come immediately afterwards.
-
-##### Parameters
-
-- `ref`: The ID to reference in the document.
-  The text for the reference will automatically be set based on the type of
-  element it refers to: "section", "table", or "gloss"; followed by the number
-  of that element.
-  If the reference points to an element with the `nonumber` parameter, then a
-  warning will be raised, and the text will simply be the type of the element.
-- `class`: The CSS classes to apply to this reference.
+The directive must be followed by the ID of a block in the document.
+The text for the reference will automatically be set based on the type of
+element it refers to: "section", "table", or "gloss"; followed by the number of
+that element.
+If the reference points to an element with the `nonumber` parameter, then a
+warning will be raised, and the text will simply be the type of the element.
