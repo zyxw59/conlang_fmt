@@ -98,10 +98,10 @@ By default, lists are unordered lists (bullet points).
 The directive can optionally be followed by a title for the table.
 Tables are automatically numbered.
 Rows are denoted by starting a line with `::`.
-Cells within a row are delimited by `|`.
+Cells within a row are indicated by a preceding `|`.
+Parameters for columns are placed in a row not starting with `::`.
 Parameters for a row are placed immediately after the `::`.
 Parameters for a cell are placed immediately after the `|`.
-> TODO: Where should column parameters go
 
 ##### Parameters
 
