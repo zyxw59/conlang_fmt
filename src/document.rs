@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[derive(Debug, Default)]
 pub struct Document {
     /// A list of blocks in the document
     blocks: Vec<Block>,
@@ -14,12 +15,14 @@ pub struct Document {
     ids: HashMap<String, usize>,
 }
 
+#[derive(Debug)]
 pub struct Block {
-    kind: BlockType,
-    class: String,
-    id: String,
+    pub kind: BlockType,
+    pub class: String,
+    pub id: String,
 }
 
+#[derive(Debug)]
 pub enum BlockType {
     Heading(Heading),
     Contents(Contents),
@@ -29,6 +32,7 @@ pub enum BlockType {
     Paragraph(Text),
 }
 
+#[derive(Debug)]
 pub struct Heading {
     pub title: Text,
     pub numbered: bool,
@@ -36,21 +40,25 @@ pub struct Heading {
     pub children: Vec<usize>,
 }
 
+#[derive(Debug)]
 pub struct Contents {
     pub title: Text,
     pub max_level: usize,
 }
 
+#[derive(Debug)]
 pub struct List {
     pub items: Vec<ListItem>,
     pub ordered: bool,
 }
 
+#[derive(Debug)]
 pub struct ListItem {
     pub text: Text,
     pub sublist: Option<List>,
 }
 
+#[derive(Debug)]
 pub struct Table {
     pub title: Text,
     pub numbered: bool,
@@ -58,23 +66,27 @@ pub struct Table {
     pub columns: Vec<Column>,
 }
 
+#[derive(Debug)]
 pub struct Row {
     pub cells: Vec<Cell>,
     pub header: bool,
     pub class: String,
 }
 
+#[derive(Debug)]
 pub struct Column {
     pub header: bool,
     pub class: String,
 }
 
+#[derive(Debug)]
 pub struct Cell {
     rows: usize,
     cols: usize,
     text: Text,
 }
 
+#[derive(Debug)]
 pub struct Gloss {
     pub title: Text,
     pub numbered: bool,
@@ -85,11 +97,13 @@ pub struct Gloss {
 
 pub type Text = Vec<Inline>;
 
+#[derive(Debug)]
 pub struct Inline {
     pub kind: InlineType,
     pub class: String,
 }
 
+#[derive(Debug)]
 pub enum InlineType {
     Emphasis(Text),
     Strong(Text),
@@ -102,6 +116,7 @@ pub enum InlineType {
     Link(Link),
 }
 
+#[derive(Debug)]
 pub struct Link {
     pub url: String,
     pub title: Text,
