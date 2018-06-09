@@ -12,7 +12,10 @@ pub struct Input<B> {
     buffer: Vec<String>,
 }
 
-impl<B> Input<B> where B: BufRead {
+impl<B> Input<B>
+where
+    B: BufRead,
+{
     pub fn new(input: B) -> Input<B> {
         Input {
             lines: input.lines().enumerate(),

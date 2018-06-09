@@ -1,5 +1,5 @@
-use std::io;
 use std::fmt;
+use std::io;
 
 use failure::{Backtrace, Context, Fail};
 
