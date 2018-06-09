@@ -132,7 +132,7 @@ Parameters for a cell are placed immediately after the `|`.
   covered by an earlier multi-row cell.
   Including any text or parameters in these cells will trigger a warning.
 
-#### Glosses
+#### Glosses (`:gloss:`)
 
 The directive can optionally be followed by a title for the gloss.
 Glosses are automatically numbered.
