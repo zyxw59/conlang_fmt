@@ -9,10 +9,13 @@ use errors::{Error, ErrorKind};
 #[derive(Debug)]
 pub struct Input<B> {
     lines: Enumerate<Lines<B>>,
-    buffer: Vec<String>,
+    buffer: Vec<char>,
 }
 
-impl<B> Input<B> where B: BufRead {
+impl<B> Input<B>
+where
+    B: BufRead,
+{
     pub fn new(input: B) -> Input<B> {
         Input {
             lines: input.lines().enumerate(),
@@ -42,7 +45,7 @@ impl<B> Input<B> where B: BufRead {
                     // if this is the first line of the block, set the start line
                     start_line = Some(line_number);
                 }
-                self.buffer.push(line);
+                self.buffer.extend(line.chars());
             }
         }
         // if we broke earlier, or if we've reached the end of the text, return the iterator.
@@ -58,13 +61,13 @@ impl<B> Input<B> where B: BufRead {
 /// An iterator over the lines of a block.
 #[derive(Debug)]
 pub struct Block<'a> {
-    iter: Drain<'a, String>,
+    iter: Drain<'a, char>,
     len: usize,
     start: Option<usize>,
 }
 
 impl<'a> Block<'a> {
-    /// Returns the length of the block, in number of lines.
+    /// Returns the length of the block, in number of characters.
     pub fn len(&self) -> usize {
         self.len
     }
@@ -76,9 +79,9 @@ impl<'a> Block<'a> {
 }
 
 impl<'a> Iterator for Block<'a> {
-    type Item = String;
+    type Item = char;
 
-    fn next(&mut self) -> Option<String> {
+    fn next(&mut self) -> Option<char> {
         self.iter.next()
     }
 
