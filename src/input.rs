@@ -6,6 +6,7 @@ use std::vec::Drain;
 use failure::ResultExt;
 
 use errors::{Error, ErrorKind};
+use document;
 
 #[derive(Debug)]
 pub struct Input<B> {
@@ -71,6 +72,29 @@ impl<'a> Block<'a> {
             slice,
             start,
             idx: 0,
+        }
+    }
+
+    /// Parses the block.
+    pub fn parse(&mut self) -> Result<Option<document::Block>, Error> {
+        // skip leading whitespace
+        self.skip_whitespace();
+        match self.next() {
+            Some(':') => {
+                let start = self.index();
+                self.skip_until(':');
+                let end = self.index();
+                match &self[start..end] {
+                    ['t', 'o', 'c'] => unimplemented!(),
+                    ['l', 'i', 's', 't'] => unimplemented!(),
+                    ['t', 'a', 'b', 'l', 'e'] => unimplemented!(),
+                    ['g', 'l', 'o', 's', 's'] => unimplemented!(),
+                    _ => unimplemented!(),
+                }
+            }
+            Some('#') => unimplemented!(),
+            Some(_) => unimplemented!(),
+            None => unimplemented!(),
         }
     }
 
