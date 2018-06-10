@@ -176,12 +176,10 @@ mod tests {
 
         {
             let block = input.next_block().unwrap();
-            assert_eq!(block.len(), 3);
             assert_eq!(block.start(), Some(0));
         }
         {
             let block = input.next_block().unwrap();
-            assert_eq!(block.len(), 2);
             assert_eq!(block.start(), Some(4));
         }
         {
@@ -207,12 +205,10 @@ mod tests {
 
         {
             let block = input.next_block().unwrap();
-            assert_eq!(block.len(), 3);
             assert_eq!(block.start(), Some(0));
         }
         {
             let block = input.next_block().unwrap();
-            assert_eq!(block.len(), 2);
             assert_eq!(block.start(), Some(5));
         }
         {
@@ -232,7 +228,6 @@ mod tests {
 
         {
             let block = input.next_block().unwrap();
-            assert_eq!(block.len(), 3);
             assert_eq!(block.start(), Some(0));
         }
         {
