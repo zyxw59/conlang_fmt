@@ -105,7 +105,7 @@ impl<'a> Block<'a> {
                     return Ok(self[start..end].iter().collect());
                 }
                 '\\' => {
-                    self.next();
+                    self.idx += 1;
                 }
                 '\n' => {
                     return self.error("Unexpected end of line while scanning for directive");
