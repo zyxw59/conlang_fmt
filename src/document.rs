@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::default::Default;
 
 #[derive(Debug, Default)]
 pub struct Document {
@@ -18,8 +19,57 @@ pub struct Document {
 #[derive(Debug)]
 pub struct Block {
     pub kind: BlockType,
+    pub common: BlockCommon,
+}
+
+#[derive(Debug, Default)]
+pub struct BlockCommon {
     pub class: String,
     pub id: String,
+}
+
+impl Block {
+    pub fn heading() -> Block {
+        Block {
+            kind: BlockType::Heading(Default::default()),
+            common: Default::default(),
+        }
+    }
+
+    pub fn contents() -> Block {
+        Block {
+            kind: BlockType::Contents(Default::default()),
+            common: Default::default(),
+        }
+    }
+
+    pub fn list() -> Block {
+        Block {
+            kind: BlockType::List(Default::default()),
+            common: Default::default(),
+        }
+    }
+
+    pub fn table() -> Block {
+        Block {
+            kind: BlockType::Table(Default::default()),
+            common: Default::default(),
+        }
+    }
+
+    pub fn gloss() -> Block {
+        Block {
+            kind: BlockType::Gloss(Default::default()),
+            common: Default::default(),
+        }
+    }
+
+    pub fn paragraph() -> Block {
+        Block {
+            kind: BlockType::Paragraph(Default::default()),
+            common: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -32,7 +82,7 @@ pub enum BlockType {
     Paragraph(Text),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Heading {
     pub title: Text,
     pub numbered: bool,
@@ -40,25 +90,25 @@ pub struct Heading {
     pub children: Vec<usize>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Contents {
     pub title: Text,
     pub max_level: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct List {
     pub items: Vec<ListItem>,
     pub ordered: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ListItem {
     pub text: Text,
     pub sublist: Option<List>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Table {
     pub title: Text,
     pub numbered: bool,
@@ -66,27 +116,27 @@ pub struct Table {
     pub columns: Vec<Column>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Row {
     pub cells: Vec<Cell>,
     pub header: bool,
     pub class: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Column {
     pub header: bool,
     pub class: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Cell {
     rows: usize,
     cols: usize,
     text: Text,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Gloss {
     pub title: Text,
     pub numbered: bool,
@@ -116,7 +166,7 @@ pub enum InlineType {
     Link(Link),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Link {
     pub url: String,
     pub title: Text,
