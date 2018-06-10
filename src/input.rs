@@ -1,9 +1,9 @@
 use std::io::{BufRead, Lines};
 use std::iter::Enumerate;
 use std::ops::Deref;
-use std::vec::Drain;
 
 use failure::{err_msg, ResultExt};
+use itertools::Itertools;
 
 use document;
 use errors::{ErrorKind, Result as EResult};
@@ -125,12 +125,16 @@ impl<'a> Block<'a> {
                 // skip the `[` we just matched
                 self.idx += 1;
                 // loop over arguments
-                'arguments: loop {
+                loop {
+                    // skip whitespace
                     self.skip_whitespace();
-                    let start = self.index();
-                    // loop over chars
-                    while let Some(c) = self.next() {
-                        unimplemented!();
+                    match self.peek() {
+                        // end of the parameter list
+                        Some(']') => return Ok(params),
+                        // something else: it's a parameter
+                        Some(_) => params.push(self.parameter()?),
+                        // end of input!
+                        None => self.error("Unexpected end of block while scanning for parameters")
                     }
                 }
             }
@@ -138,18 +142,119 @@ impl<'a> Block<'a> {
         }
     }
 
-    /// Returns the contents of a `{}`-delimited text, assuming the first `{` has already been
-    /// matched.
-    fn bracketed(&mut self) -> EResult<String> {
-        let mut out = String::new();
+    /// Matches a parameter.
+    ///
+    /// Leading and trailing whitespace is ignored, and all internal whitespace is replaced by a
+    /// single space.
+    fn parameter(&mut self) -> EResult<Parameter> {
+        // skip leading whitespace
+        self.skip_whitespace();
+        // we'll build the parameter out of whitespace-separated strings, replacing all
+        // intermediate whitespace with a single space.
+        let mut param_builder = Vec::new();
+        param_builder.push(String::new());
+        let mut value = None;
+        // loop over chars
+        while let Some(c) = self.peek() {
+            match c {
+                // end of the parameter list; return what we have so far, but keep the `]` on the
+                // stack.
+                ']' => break,
+                // get the next character, whatever it may be.
+                '\\' => {
+                    self.idx += 1;
+                    param_builder.last_mut().unwrap().push(self.expect()?);
+                }
+                // bracketed text
+                '{' => {
+                    self.idx += 1;
+                    self.bracketed(&mut param_builder.last_mut().unwrap())?;
+                }
+                // end of this parameter; return what we have so far, and pop the `,`.
+                ',' => {
+                    self.idx += 1;
+                    break;
+                }
+                // end of the parameter name; now get the value
+                '=' => {
+                    self.idx += 1;
+                    value = Some(self.parameter_value()?);
+                    break;
+                }
+                // skip whitespace, and start a new word.
+                c if c.is_whitespace() => {
+                    param_builder.push(String::new());
+                    self.skip_whitespace();
+                }
+                // otherwise, push the char and keep going.
+                c => {
+                    self.idx += 1;
+                    param_builder.last_mut().unwrap().push(c);
+                }
+            }
+        }
+        let name = param_builder.iter().filter(|w| w.len() > 0).join(" ");
+        Ok(Parameter(name, value))
+    }
+
+    /// Matches a parameter value.
+    ///
+    /// Leading and trailing whitespace is ignored, and all internal whitespace is replaced by a
+    /// single space.
+    fn parameter_value(&mut self) -> EResult<String> {
+        // skip leading whitespace
+        self.skip_whitespace();
+        // we'll build the parameter value out of whitespace-separated strings, replacing all
+        // intermediate whitespace with a single space.
+        let mut param_builder = Vec::new();
+        param_builder.push(String::new());
+        // loop over chars
+        while let Some(c) = self.peek() {
+            match c {
+                // end of the parameter list; return what we have so far, but keep the `]` on the
+                // stack.
+                ']' => break,
+                // get the next character, whatever it may be.
+                '\\' => {
+                    self.idx += 1;
+                    param_builder.last_mut().unwrap().push(self.expect()?);
+                }
+                // bracketed text
+                '{' => {
+                    self.idx += 1;
+                    self.bracketed(&mut param_builder.last_mut().unwrap())?;
+                }
+                // end of this parameter; return what we have so far, and pop the `,`.
+                ',' => {
+                    self.idx += 1;
+                    break;
+                }
+                // skip whitespace, and start a new word.
+                c if c.is_whitespace() => {
+                    param_builder.push(String::new());
+                    self.skip_whitespace();
+                }
+                // otherwise, push the char and keep going.
+                c => {
+                    self.idx += 1;
+                    param_builder.last_mut().unwrap().push(c);
+                }
+            }
+        }
+        Ok(param_builder.iter().filter(|w| w.len() > 0).join(" "))
+    }
+
+    /// Pushes contents of a `{}`-delimited text to the given buffer, assuming the first `{` has
+    /// already been matched.
+    fn bracketed(&mut self, buffer: &mut String) -> EResult<()> {
         while let Some(c) = self.next() {
             match c {
                 // done
-                '}' => return Ok(out),
+                '}' => return Ok(()),
                 // get the next character, whatever it may be.
-                '\\' => out.push(self.expect()?),
+                '\\' => buffer.push(self.expect()?),
                 // otherwise, just push whatever we see.
-                _ => out.push(c),
+                _ => buffer.push(c),
             }
         }
         self.error("Unexpected end of block while scanning for `}`")
@@ -223,7 +328,7 @@ impl<'a> Deref for Block<'a> {
     }
 }
 
-struct Parameter(String, String);
+struct Parameter(String, Option<String>);
 
 #[cfg(test)]
 mod tests {
