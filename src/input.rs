@@ -6,8 +6,7 @@ use std::vec::Drain;
 use failure::{err_msg, ResultExt};
 
 use document;
-use errors::{Error, ErrorKind};
-use errors::Result as EResult;
+use errors::{ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
 
@@ -117,9 +116,58 @@ impl<'a> Block<'a> {
         self.error("Unexpected end of block while scanning for directive")
     }
 
+    /// Returns a list of parameters. If a parameter list isn't present, returns an empty list.
+    fn parameters(&mut self) -> EResult<Vec<Parameter>> {
+        self.skip_whitespace();
+        let mut params = Vec::new();
+        match self.peek() {
+            Some('[') => {
+                // skip the `[` we just matched
+                self.idx += 1;
+                // loop over arguments
+                'arguments: loop {
+                    self.skip_whitespace();
+                    let start = self.index();
+                    // loop over chars
+                    while let Some(c) = self.next() {
+                        unimplemented!();
+                    }
+                }
+            }
+            _ => Ok(params),
+        }
+    }
+
+    /// Returns the contents of a `{}`-delimited text, assuming the first `{` has already been
+    /// matched.
+    fn bracketed(&mut self) -> EResult<String> {
+        let mut out = String::new();
+        while let Some(c) = self.next() {
+            match c {
+                // done
+                '}' => return Ok(out),
+                // get the next character, whatever it may be.
+                '\\' => out.push(self.expect()?),
+                // otherwise, just push whatever we see.
+                _ => out.push(c),
+            }
+        }
+        self.error("Unexpected end of block while scanning for `}`")
+    }
+
+    /// Returns the next character, or an error if the end of the block is reached.
+    fn expect(&mut self) -> EResult<char> {
+        match self.next() {
+            Some(c) => Ok(c),
+            None => self.error("Unexpected end of block."),
+        }
+    }
+
     /// Returns an error with the given message, wrapped in an `ErrorKind::Block` and a `Result`.
     fn error<T>(&self, msg: &'static str) -> EResult<T> {
-        Err(err_msg(msg).context(ErrorKind::Block(self.start.unwrap())).into())
+        Err(err_msg(msg)
+            .context(ErrorKind::Block(self.start.unwrap()))
+            .into())
     }
 
     /// Returns the length of the block, in number of characters.
@@ -174,6 +222,8 @@ impl<'a> Deref for Block<'a> {
         &self.slice
     }
 }
+
+struct Parameter(String, String);
 
 #[cfg(test)]
 mod tests {
