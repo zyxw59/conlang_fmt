@@ -3,10 +3,10 @@ use std::iter::Enumerate;
 use std::ops::Deref;
 use std::vec::Drain;
 
-use failure::ResultExt;
+use failure::{err_msg, ResultExt};
 
-use errors::{Error, ErrorKind};
 use document;
+use errors::{Error, ErrorKind};
 
 #[derive(Debug)]
 pub struct Input<B> {
@@ -80,22 +80,43 @@ impl<'a> Block<'a> {
         // skip leading whitespace
         self.skip_whitespace();
         match self.next() {
-            Some(':') => {
-                let start = self.index();
-                self.skip_until(':');
-                let end = self.index();
-                match &self[start..end] {
-                    ['t', 'o', 'c'] => unimplemented!(),
-                    ['l', 'i', 's', 't'] => unimplemented!(),
-                    ['t', 'a', 'b', 'l', 'e'] => unimplemented!(),
-                    ['g', 'l', 'o', 's', 's'] => unimplemented!(),
-                    _ => unimplemented!(),
-                }
-            }
+            Some(':') => match &*self.directive()? {
+                "toc" => unimplemented!(),
+                "list" => unimplemented!(),
+                "table" => unimplemented!(),
+                "gloss" => unimplemented!(),
+                _ => unimplemented!(),
+            },
             Some('#') => unimplemented!(),
             Some(_) => unimplemented!(),
             None => unimplemented!(),
         }
+    }
+
+    /// Returns a directive as a string, assuming the first `:` has already been parsed.
+    fn directive(&mut self) -> Result<String, Error> {
+        let start = self.index();
+        while let Some(c) = self.next() {
+            match c {
+                ':' => {
+                    let end = self.index();
+                    return Ok(self[start..end].iter().collect());
+                }
+                '\\' => {
+                    self.next();
+                }
+                '\n' => {
+                    return self.error("Unexpected end of line while scanning for directive");
+                }
+                _ => {}
+            }
+        }
+        self.error("Unexpected end of block while scanning for directive")
+    }
+
+    /// Returns an error with the given message, wrapped in an `ErrorKind::Block` and a `Result`.
+    fn error<T>(&self, msg: &'static str) -> Result<T, Error> {
+        Err(err_msg(msg).context(ErrorKind::Block(self.start.unwrap())).into())
     }
 
     /// Returns the length of the block, in number of characters.
@@ -128,11 +149,6 @@ impl<'a> Block<'a> {
             }
         }
     }
-
-    /// Skips until the specified character is found.
-    pub fn skip_until(&mut self, c: char) {
-        while self.next() != Some(c) {}
-    }
 }
 
 impl<'a> Iterator for Block<'a> {
@@ -149,9 +165,9 @@ impl<'a> Iterator for Block<'a> {
 }
 
 impl<'a> Deref for Block<'a> {
-    type Target = &'a[char];
+    type Target = &'a [char];
 
-    fn deref(&self) -> &&'a[char] {
+    fn deref(&self) -> &&'a [char] {
         &self.slice
     }
 }
