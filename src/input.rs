@@ -1,5 +1,6 @@
 use std::io::{BufRead, Lines};
 use std::iter::Enumerate;
+use std::ops::Deref;
 use std::vec::Drain;
 
 use failure::ResultExt;
@@ -23,13 +24,15 @@ where
         }
     }
 
-    /// Retrieves the next block from the input, as an iterator over lines.
+    /// Retrieves the next block from the input.
     ///
     /// Blocks are delimited by blank (all-whitespace) lines.
     ///
     /// An empty block signifies that the end of the input has been reached.
     pub fn next_block(&mut self) -> Result<Block, Error> {
         let mut start_line = None;
+        // clear buffer
+        self.buffer.clear();
         while let Some((line_number, line)) = self.lines.next() {
             // unwrap line
             let line = line.with_context(|e| ErrorKind::from_io(e, line_number))?;
@@ -46,35 +49,65 @@ where
                     start_line = Some(line_number);
                 }
                 self.buffer.extend(line.chars());
+                self.buffer.push('\n');
             }
         }
         // if we broke earlier, or if we've reached the end of the text, return the iterator.
-        // we use `drain` so that we can reuse `buffer`.
-        Ok(Block {
-            len: self.buffer.len(),
-            start: start_line,
-            iter: self.buffer.drain(..),
-        })
+        Ok(Block::new(self.buffer.as_ref(), start_line))
     }
 }
 
-/// An iterator over the lines of a block.
+/// A slice of characters representing a block
 #[derive(Debug)]
 pub struct Block<'a> {
-    iter: Drain<'a, char>,
-    len: usize,
+    slice: &'a [char],
     start: Option<usize>,
+    idx: usize,
 }
 
 impl<'a> Block<'a> {
+    pub fn new(slice: &'a [char], start: Option<usize>) -> Block<'a> {
+        Block {
+            slice,
+            start,
+            idx: 0,
+        }
+    }
+
     /// Returns the length of the block, in number of characters.
     pub fn len(&self) -> usize {
-        self.len
+        self.slice.len()
     }
 
     /// Returns the starting line number of the block, which is only defined for non-empty blocks.
     pub fn start(&self) -> Option<usize> {
         self.start
+    }
+
+    /// Returns the current index of the iterator.
+    pub fn index(&self) -> usize {
+        self.idx
+    }
+
+    /// Peeks at the next character in the block, without advancing the iterator.
+    pub fn peek(&self) -> Option<char> {
+        self.slice.get(self.idx + 1).cloned()
+    }
+
+    /// Skips until the next non-whitespace character.
+    pub fn skip_whitespace(&mut self) {
+        while let Some(c) = self.peek() {
+            if c.is_whitespace() {
+                return;
+            } else {
+                self.idx += 1;
+            }
+        }
+    }
+
+    /// Skips until the specified character is found.
+    pub fn skip_until(&mut self, c: char) {
+        while self.next() != Some(c) {}
     }
 }
 
@@ -82,11 +115,20 @@ impl<'a> Iterator for Block<'a> {
     type Item = char;
 
     fn next(&mut self) -> Option<char> {
-        self.iter.next()
+        self.idx += 1;
+        self.slice.get(self.idx).cloned()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.len, Some(self.len))
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<'a> Deref for Block<'a> {
+    type Target = &'a[char];
+
+    fn deref(&self) -> &&'a[char] {
+        &self.slice
     }
 }
 
