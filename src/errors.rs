@@ -1,7 +1,10 @@
 use std::fmt;
 use std::io;
+use std::result;
 
 use failure::{Backtrace, Context, Fail};
+
+pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
 pub struct Error {

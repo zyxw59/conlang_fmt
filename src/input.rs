@@ -6,7 +6,7 @@ use std::vec::Drain;
 use failure::{err_msg, ResultExt};
 
 use document;
-use errors::{Error, ErrorKind};
+use errors::{Error, ErrorKind, self};
 
 #[derive(Debug)]
 pub struct Input<B> {
@@ -30,7 +30,7 @@ where
     /// Blocks are delimited by blank (all-whitespace) lines.
     ///
     /// An empty block signifies that the end of the input has been reached.
-    pub fn next_block(&mut self) -> Result<Block, Error> {
+    pub fn next_block(&mut self) -> errors::Result<Block> {
         let mut start_line = None;
         // clear buffer
         self.buffer.clear();
@@ -76,7 +76,7 @@ impl<'a> Block<'a> {
     }
 
     /// Parses the block.
-    pub fn parse(&mut self) -> Result<Option<document::Block>, Error> {
+    pub fn parse(&mut self) -> errors::Result<Option<document::Block>> {
         // skip leading whitespace
         self.skip_whitespace();
         match self.next() {
@@ -94,7 +94,7 @@ impl<'a> Block<'a> {
     }
 
     /// Returns a directive as a string, assuming the first `:` has already been parsed.
-    fn directive(&mut self) -> Result<String, Error> {
+    fn directive(&mut self) -> errors::Result<String> {
         let start = self.index();
         while let Some(c) = self.next() {
             match c {
@@ -115,7 +115,7 @@ impl<'a> Block<'a> {
     }
 
     /// Returns an error with the given message, wrapped in an `ErrorKind::Block` and a `Result`.
-    fn error<T>(&self, msg: &'static str) -> Result<T, Error> {
+    fn error<T>(&self, msg: &'static str) -> errors::Result<T> {
         Err(err_msg(msg).context(ErrorKind::Block(self.start.unwrap())).into())
     }
 
