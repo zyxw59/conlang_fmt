@@ -124,17 +124,26 @@ impl<'a> Block<'a> {
             Some('[') => {
                 // skip the `[` we just matched
                 self.idx += 1;
+                // skip whitespace
+                self.skip_whitespace();
                 // loop over arguments
                 loop {
-                    // skip whitespace
-                    self.skip_whitespace();
                     match self.peek() {
                         // end of the parameter list
-                        Some(']') => return Ok(params),
+                        Some(']') => {
+                            self.idx += 1;
+                            return Ok(params);
+                        }
                         // something else: it's a parameter
-                        Some(_) => params.push(self.parameter()?),
+                        Some(_) => {
+                            self.parameter()?.map(|p| params.push(p));
+                        }
                         // end of input!
-                        None => self.error("Unexpected end of block while scanning for parameters")
+                        None => {
+                            return self.error(
+                                "Unexpected end of block while scanning for parameters",
+                            );
+                        }
                     }
                 }
             }
@@ -146,7 +155,7 @@ impl<'a> Block<'a> {
     ///
     /// Leading and trailing whitespace is ignored, and all internal whitespace is replaced by a
     /// single space.
-    fn parameter(&mut self) -> EResult<Parameter> {
+    fn parameter(&mut self) -> OResult<Parameter> {
         // skip leading whitespace
         self.skip_whitespace();
         // we'll build the parameter out of whitespace-separated strings, replacing all
@@ -194,7 +203,11 @@ impl<'a> Block<'a> {
             }
         }
         let name = param_builder.iter().filter(|w| w.len() > 0).join(" ");
-        Ok(Parameter(name, value))
+        if name.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(Parameter(name, value)))
+        }
     }
 
     /// Matches a parameter value.
