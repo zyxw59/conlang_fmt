@@ -16,16 +16,12 @@ pub struct Document {
     ids: HashMap<String, usize>,
 }
 
+pub struct Parameter(pub Option<String>, pub String);
+
 #[derive(Debug)]
 pub struct Block {
     pub kind: BlockType,
     pub common: BlockCommon,
-}
-
-#[derive(Debug, Default)]
-pub struct BlockCommon {
-    pub class: String,
-    pub id: String,
 }
 
 impl Block {
@@ -70,6 +66,36 @@ impl Block {
             common: Default::default(),
         }
     }
+
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+        self.kind
+            .update_param(param)
+            .and_then(|p| self.common.update_param(p))
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct BlockCommon {
+    pub class: String,
+    pub id: String,
+}
+
+impl BlockCommon {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+        match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("class") | None => {
+                self.class = param.1;
+                None
+            }
+            Some("id") => {
+                self.id = param.1;
+                None
+            }
+            _ => Some(param),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -82,12 +108,47 @@ pub enum BlockType {
     Paragraph(Text),
 }
 
+impl BlockType {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+        match *self {
+            BlockType::Heading(ref mut heading) => heading.update_param(param),
+            BlockType::Contents(ref mut contents) => contents.update_param(param),
+            BlockType::List(ref mut list) => list.update_param(param),
+            BlockType::Table(ref mut table) => table.update_param(param),
+            BlockType::Gloss(ref mut gloss) => gloss.update_param(param),
+            BlockType::Paragraph(_) => Some(param),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Heading {
     pub title: Text,
     pub numbered: bool,
+    pub toc: bool,
     pub level: usize,
     pub children: Vec<usize>,
+}
+
+impl Heading {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+        match param.0.as_ref() {
+            Some(_) => Some(param),
+            None => match param.1.as_ref() {
+                "nonumber" => {
+                    self.numbered = false;
+                    None
+                }
+                "notoc" => {
+                    self.toc = false;
+                    None
+                }
+                _ => Some(param),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -96,10 +157,42 @@ pub struct Contents {
     pub max_level: usize,
 }
 
+impl Contents {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+        match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("max_level") => match param.1.parse() {
+                Ok(level) => {
+                    self.max_level = level;
+                    None
+                }
+                Err(_) => Some(param),
+            },
+            _ => Some(param),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct List {
     pub items: Vec<ListItem>,
     pub ordered: bool,
+}
+
+impl List {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+        match param.0.as_ref() {
+            Some(_) => Some(param),
+            None => match param.1.as_ref() {
+                "ordered" => {
+                    self.ordered = true;
+                    None
+                }
+                _ => Some(param),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -114,6 +207,22 @@ pub struct Table {
     pub numbered: bool,
     pub rows: Vec<Row>,
     pub columns: Vec<Column>,
+}
+
+impl Table {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+        match param.0.as_ref() {
+            Some(_) => Some(param),
+            None => match param.1.as_ref() {
+                "nonumber" => {
+                    self.numbered = false;
+                    None
+                }
+                _ => Some(param),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -143,6 +252,22 @@ pub struct Gloss {
     pub preamble: Vec<Text>,
     pub gloss: Vec<Vec<Text>>,
     pub postamble: Vec<Text>,
+}
+
+impl Gloss {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+        match param.0.as_ref() {
+            Some(_) => Some(param),
+            None => match param.1.as_ref() {
+                "nonumber" => {
+                    self.numbered = false;
+                    None
+                }
+                _ => Some(param),
+            },
+        }
+    }
 }
 
 pub type Text = Vec<Inline>;

@@ -5,7 +5,7 @@ use std::ops::Deref;
 use failure::{err_msg, ResultExt};
 use itertools::Itertools;
 
-use document;
+use document::{self, Parameter};
 use errors::{ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
@@ -206,7 +206,10 @@ impl<'a> Block<'a> {
         if name.len() == 0 {
             Ok(None)
         } else {
-            Ok(Some(Parameter(name, value)))
+            match value {
+                Some(value) => Ok(Some(Parameter(Some(name), value))),
+                None => Ok(Some(Parameter(None, name))),
+            }
         }
     }
 
@@ -340,8 +343,6 @@ impl<'a> Deref for Block<'a> {
         &self.slice
     }
 }
-
-struct Parameter(String, Option<String>);
 
 #[cfg(test)]
 mod tests {
