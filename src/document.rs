@@ -1,6 +1,12 @@
 use std::collections::HashMap;
 use std::default::Default;
 
+use failure::ResultExt;
+
+use errors::{ErrorKind, Result as EResult};
+
+type OResult<T> = EResult<Option<T>>;
+
 #[derive(Debug, Default)]
 pub struct Document {
     /// A list of blocks in the document
@@ -68,10 +74,11 @@ impl Block {
     }
 
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
-        self.kind
-            .update_param(param)
-            .and_then(|p| self.common.update_param(p))
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        self.kind.update_param(param).and_then(|p| match p {
+            Some(p) => self.common.update_param(p),
+            None => Ok(None),
+        })
     }
 }
 
@@ -83,8 +90,8 @@ pub struct BlockCommon {
 
 impl BlockCommon {
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
-        match param.0.as_ref().map(|n| n.as_ref()) {
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("class") | None => {
                 self.class = param.1;
                 None
@@ -94,7 +101,7 @@ impl BlockCommon {
                 None
             }
             _ => Some(param),
-        }
+        })
     }
 }
 
@@ -110,14 +117,14 @@ pub enum BlockType {
 
 impl BlockType {
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         match *self {
             BlockType::Heading(ref mut heading) => heading.update_param(param),
             BlockType::Contents(ref mut contents) => contents.update_param(param),
             BlockType::List(ref mut list) => list.update_param(param),
             BlockType::Table(ref mut table) => table.update_param(param),
             BlockType::Gloss(ref mut gloss) => gloss.update_param(param),
-            BlockType::Paragraph(_) => Some(param),
+            BlockType::Paragraph(_) => Ok(Some(param)),
         }
     }
 }
@@ -133,8 +140,8 @@ pub struct Heading {
 
 impl Heading {
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
-        match param.0.as_ref() {
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {
                 "nonumber" => {
@@ -147,7 +154,7 @@ impl Heading {
                 }
                 _ => Some(param),
             },
-        }
+        })
     }
 }
 
@@ -159,17 +166,14 @@ pub struct Contents {
 
 impl Contents {
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
-        match param.0.as_ref().map(|n| n.as_ref()) {
-            Some("max_level") => match param.1.parse() {
-                Ok(level) => {
-                    self.max_level = level;
-                    None
-                }
-                Err(_) => Some(param),
-            },
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("max_level") => {
+                self.max_level = param.1.parse::<usize>().with_context(|_| ErrorKind::Parse)?;
+                None
+            }
             _ => Some(param),
-        }
+        })
     }
 }
 
@@ -181,8 +185,8 @@ pub struct List {
 
 impl List {
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
-        match param.0.as_ref() {
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {
                 "ordered" => {
@@ -191,7 +195,7 @@ impl List {
                 }
                 _ => Some(param),
             },
-        }
+        })
     }
 }
 
@@ -211,8 +215,8 @@ pub struct Table {
 
 impl Table {
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
-        match param.0.as_ref() {
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {
                 "nonumber" => {
@@ -221,7 +225,7 @@ impl Table {
                 }
                 _ => Some(param),
             },
-        }
+        })
     }
 }
 
@@ -256,8 +260,8 @@ pub struct Gloss {
 
 impl Gloss {
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> Option<Parameter> {
-        match param.0.as_ref() {
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {
                 "nonumber" => {
@@ -266,7 +270,7 @@ impl Gloss {
                 }
                 _ => Some(param),
             },
-        }
+        })
     }
 }
 

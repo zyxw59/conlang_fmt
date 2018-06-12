@@ -51,6 +51,8 @@ impl From<Context<ErrorKind>> for Error {
 pub enum ErrorKind {
     #[fail(display = "Failed to parse block starting on line {}", _0)]
     Block(usize),
+    #[fail(display = "Parsing error")]
+    Parse,
     #[fail(display = "Invalid UTF-8 in line {}", _0)]
     Unicode(usize),
     #[fail(display = "An IO error occurred while reading line {}", _0)]
