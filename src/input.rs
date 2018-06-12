@@ -2,11 +2,11 @@ use std::io::{BufRead, Lines};
 use std::iter::Enumerate;
 use std::ops::Deref;
 
-use failure::{err_msg, ResultExt};
+use failure::{Fail, ResultExt};
 use itertools::Itertools;
 
 use document::{self, Parameter};
-use errors::{ErrorKind, Result as EResult};
+use errors::{EndOfBlockKind, ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
 
@@ -115,7 +115,7 @@ impl<'a> Block<'a> {
             }
             None => return Ok(None),
         };
-        unimplemented!();
+        unimplemented!()
     }
 
     /// Returns a directive as a string, assuming the first `:` has already been parsed.
@@ -131,12 +131,12 @@ impl<'a> Block<'a> {
                     self.idx += 1;
                 }
                 '\n' => {
-                    return self.error("Unexpected end of line while scanning for directive");
+                    break;
                 }
                 _ => {}
             }
         }
-        self.error("Unexpected end of block while scanning for directive")
+        self.end_of_block(EndOfBlockKind::Directive)
     }
 
     /// Returns a list of parameters. If a parameter list isn't present, returns an empty list.
@@ -163,9 +163,7 @@ impl<'a> Block<'a> {
                         }
                         // end of input!
                         None => {
-                            return self.error(
-                                "Unexpected end of block while scanning for parameters",
-                            );
+                            return self.end_of_block(EndOfBlockKind::Parameter);
                         }
                     }
                 }
@@ -283,7 +281,7 @@ impl<'a> Block<'a> {
         Ok(param_builder.iter().filter(|w| w.len() > 0).join(" "))
     }
 
-    /// Pushes contents of a `{}`-delimited text to the given buffer, assuming the first `{` has
+    /// Pushes contents of a `{}`-delimited group to the given buffer, assuming the first `{` has
     /// already been matched.
     fn bracketed(&mut self, buffer: &mut String) -> EResult<()> {
         while let Some(c) = self.next() {
@@ -296,20 +294,20 @@ impl<'a> Block<'a> {
                 _ => buffer.push(c),
             }
         }
-        self.error("Unexpected end of block while scanning for `}`")
+        self.end_of_block(EndOfBlockKind::Group)
     }
 
     /// Returns the next character, or an error if the end of the block is reached.
     fn expect(&mut self) -> EResult<char> {
         match self.next() {
             Some(c) => Ok(c),
-            None => self.error("Unexpected end of block."),
+            None => self.end_of_block(EndOfBlockKind::Escape),
         }
     }
 
-    /// Returns an error with the given message, wrapped in an `ErrorKind::Block` and a `Result`.
-    fn error<T>(&self, msg: &'static str) -> EResult<T> {
-        Err(err_msg(msg)
+    /// Returns an `EndOfBlock` error, wrapped in a `Block` error and a `Result`
+    fn end_of_block<T>(&self, kind: EndOfBlockKind) -> EResult<T> {
+        Err(ErrorKind::EndOfBlock(kind)
             .context(ErrorKind::Block(self.start.unwrap()))
             .into())
     }

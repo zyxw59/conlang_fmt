@@ -12,8 +12,8 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn kind(&self) -> ErrorKind {
-        *self.inner.get_context()
+    pub fn kind(&self) -> &ErrorKind {
+        self.inner.get_context()
     }
 }
 
@@ -47,12 +47,16 @@ impl From<Context<ErrorKind>> for Error {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Fail, PartialEq)]
+#[derive(Clone, Debug, Eq, Fail, PartialEq)]
 pub enum ErrorKind {
     #[fail(display = "Failed to parse block starting on line {}", _0)]
     Block(usize),
+    #[fail(display = "Unexpected end of block, {}", _0)]
+    EndOfBlock(EndOfBlockKind),
     #[fail(display = "Parsing error")]
     Parse,
+    #[fail(display = "Unknown parameter {}", _0)]
+    Parameter(String),
     #[fail(display = "Invalid UTF-8 in line {}", _0)]
     Unicode(usize),
     #[fail(display = "An IO error occurred while reading line {}", _0)]
@@ -66,4 +70,16 @@ impl ErrorKind {
             _ => ErrorKind::Io(line),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Fail, PartialEq)]
+pub enum EndOfBlockKind {
+    #[fail(display = "expected a character after `\\`")]
+    Escape,
+    #[fail(display = "expected `}}`")]
+    Group,
+    #[fail(display = "expected `]`")]
+    Parameter,
+    #[fail(display = "expected `:`")]
+    Directive,
 }
