@@ -31,48 +31,6 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn heading() -> Block {
-        Block {
-            kind: BlockType::Heading(Default::default()),
-            common: Default::default(),
-        }
-    }
-
-    pub fn contents() -> Block {
-        Block {
-            kind: BlockType::Contents(Default::default()),
-            common: Default::default(),
-        }
-    }
-
-    pub fn list() -> Block {
-        Block {
-            kind: BlockType::List(Default::default()),
-            common: Default::default(),
-        }
-    }
-
-    pub fn table() -> Block {
-        Block {
-            kind: BlockType::Table(Default::default()),
-            common: Default::default(),
-        }
-    }
-
-    pub fn gloss() -> Block {
-        Block {
-            kind: BlockType::Gloss(Default::default()),
-            common: Default::default(),
-        }
-    }
-
-    pub fn paragraph() -> Block {
-        Block {
-            kind: BlockType::Paragraph(Default::default()),
-            common: Default::default(),
-        }
-    }
-
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         self.kind.update_param(param).and_then(|p| match p {
@@ -116,6 +74,30 @@ pub enum BlockType {
 }
 
 impl BlockType {
+    pub fn heading() -> BlockType {
+        BlockType::Heading(Default::default())
+    }
+
+    pub fn contents() -> BlockType {
+        BlockType::Contents(Default::default())
+    }
+
+    pub fn list() -> BlockType {
+        BlockType::List(Default::default())
+    }
+
+    pub fn table() -> BlockType {
+        BlockType::Table(Default::default())
+    }
+
+    pub fn gloss() -> BlockType {
+        BlockType::Gloss(Default::default())
+    }
+
+    pub fn paragraph() -> BlockType {
+        BlockType::Paragraph(Default::default())
+    }
+
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         match *self {

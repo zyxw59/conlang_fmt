@@ -81,18 +81,41 @@ impl<'a> Block<'a> {
     pub fn parse(&mut self) -> OResult<document::Block> {
         // skip leading whitespace
         self.skip_whitespace();
-        match self.next() {
-            Some(':') => match &*self.directive()? {
-                "toc" => unimplemented!(),
-                "list" => unimplemented!(),
-                "table" => unimplemented!(),
-                "gloss" => unimplemented!(),
-                _ => unimplemented!(),
+        // save the position of the first non-whitespace character; if we need to rewind, this is
+        // where we should go.
+        let start = self.idx;
+        let mut block_type = match self.next() {
+            Some(':') => match self.directive()?.as_ref() {
+                "toc" => document::BlockType::contents(),
+                "list" => document::BlockType::list(),
+                "table" => document::BlockType::table(),
+                "gloss" => document::BlockType::gloss(),
+                _ => {
+                    // this directive is an inline directive; rewind and parse the block as a
+                    // paragraph
+                    self.idx = start;
+                    document::BlockType::paragraph()
+                }
             },
-            Some('#') => unimplemented!(),
-            Some(_) => unimplemented!(),
-            None => unimplemented!(),
-        }
+            Some('#') => {
+                // count the `#`s
+                while let Some('#') = self.next() {}
+                // this is the number of `#`s.
+                let level = self.idx - start;
+                // then rewind one character, we don't want to eat the character _after_ the `#`s.
+                self.idx -= 1;
+                document::BlockType::Heading(document::Heading {
+                    level,
+                    ..Default::default()
+                })
+            }
+            Some(_) => {
+                self.idx = start;
+                document::BlockType::paragraph()
+            }
+            None => return Ok(None),
+        };
+        unimplemented!();
     }
 
     /// Returns a directive as a string, assuming the first `:` has already been parsed.
