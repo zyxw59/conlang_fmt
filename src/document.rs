@@ -129,7 +129,7 @@ impl BlockType {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Heading {
     pub title: Text,
     pub numbered: bool,
@@ -158,7 +158,19 @@ impl Heading {
     }
 }
 
-#[derive(Debug, Default)]
+impl Default for Heading {
+    fn default() -> Heading {
+        Heading {
+            title: Default::default(),
+            numbered: true,
+            toc: true,
+            level: Default::default(),
+            children: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Contents {
     pub title: Text,
     pub max_level: usize,
@@ -174,6 +186,15 @@ impl Contents {
             }
             _ => Some(param),
         })
+    }
+}
+
+impl Default for Contents {
+    fn default() -> Contents {
+        Contents {
+            title: Text::from("Table of Contents"),
+            max_level: 6,
+        }
     }
 }
 
@@ -205,7 +226,7 @@ pub struct ListItem {
     pub sublist: Option<List>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Table {
     pub title: Text,
     pub numbered: bool,
@@ -229,6 +250,17 @@ impl Table {
     }
 }
 
+impl Default for Table {
+    fn default() -> Table {
+        Table {
+            title: Default::default(),
+            numbered: true,
+            rows: Default::default(),
+            columns: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Row {
     pub cells: Vec<Cell>,
@@ -249,7 +281,7 @@ pub struct Cell {
     text: Text,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Gloss {
     pub title: Text,
     pub numbered: bool,
@@ -274,12 +306,40 @@ impl Gloss {
     }
 }
 
-pub type Text = Vec<Inline>;
+impl Default for Gloss {
+    fn default() -> Gloss {
+        Gloss {
+            title: Default::default(),
+            numbered: true,
+            preamble: Default::default(),
+            gloss: Default::default(),
+            postamble: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Text(pub Vec<Inline>);
+
+impl<'a> From<&'a str> for Text {
+    fn from(s: &'a str) -> Text {
+        Text(vec![s.into()])
+    }
+}
 
 #[derive(Debug)]
 pub struct Inline {
     pub kind: InlineType,
     pub class: String,
+}
+
+impl<'a> From<&'a str> for Inline {
+    fn from(s: &'a str) -> Inline {
+        Inline {
+            kind: InlineType::Text(s.into()),
+            class: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -293,6 +353,7 @@ pub enum InlineType {
     Replace(String),
     Reference(String),
     Link(Link),
+    Text(String),
 }
 
 #[derive(Debug, Default)]
