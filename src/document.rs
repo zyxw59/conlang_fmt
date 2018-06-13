@@ -346,7 +346,7 @@ where
 {
     fn from(s: T) -> Text {
         let mut t = Text::new();
-        t.push(InlineType::Text(s.into()));
+        t.push(s.into());
         t
     }
 }
@@ -354,27 +354,55 @@ where
 #[derive(Debug)]
 pub struct Inline {
     pub kind: InlineType,
-    pub class: String,
+    pub common: InlineCommon,
 }
 
-impl From<(InlineType, String)> for Inline {
-    fn from((kind, class): (InlineType, String)) -> Inline {
-        Inline { kind, class }
+impl<T> From<(InlineType, T)> for Inline
+where
+    T: Into<InlineCommon>,
+{
+    fn from((kind, common): (InlineType, T)) -> Inline {
+        Inline {
+            kind,
+            common: common.into(),
+        }
     }
 }
 
-impl From<InlineType> for Inline {
-    fn from(kind: InlineType) -> Inline {
-        match kind {
-            // a plain `span` has a default class of `conlang`.
-            InlineType::Span(_) => Inline {
-                kind,
-                class: "conlang".into(),
-            },
-            _ => Inline {
-                kind,
-                class: String::new(),
-            },
+impl From<String> for Inline {
+    fn from(s: String) -> Inline {
+        Inline::from((InlineType::Text(s), String::new()))
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct InlineCommon {
+    pub class: String,
+}
+
+impl InlineCommon {
+    pub fn new() -> InlineCommon {
+        Default::default()
+    }
+
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("class") | None => {
+                self.class = param.1;
+                None
+            }
+            _ => Some(param),
+        })
+    }
+}
+
+impl<T> From<T> for InlineCommon
+where
+    T: Into<String>,
+{
+    fn from(class: T) -> InlineCommon {
+        InlineCommon {
+            class: class.into(),
         }
     }
 }
@@ -391,6 +419,32 @@ pub enum InlineType {
     Reference(String),
     Link(Link),
     Text(String),
+}
+
+impl InlineType {
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match *self {
+            InlineType::Reference(ref mut s) => match param.0.as_ref().map(|p| p.as_ref()) {
+                Some("ref") | None => {
+                    *s = param.1;
+                    None
+                }
+                _ => Some(param),
+            },
+            InlineType::Link(ref mut link) => match param.0.as_ref().map(|p| p.as_ref()) {
+                Some("link") | None => {
+                    link.url = param.1;
+                    None
+                }
+                Some("title") => {
+                    link.title = param.1.into();
+                    None
+                }
+                _ => Some(param),
+            },
+            _ => Some(param),
+        })
+    }
 }
 
 #[derive(Debug, Default)]

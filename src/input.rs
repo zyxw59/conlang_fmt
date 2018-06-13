@@ -113,6 +113,15 @@ macro_rules! update_one {
     };
 }
 
+macro_rules! push_and_renew {
+    ($buffer:ident : $constructor:expr, $collector:ident) => {
+        if $buffer.len() != 0 {
+            $collector.push($buffer);
+            $buffer = $constructor;
+        }
+    };
+}
+
 impl<'a> Block<'a> {
     pub fn new(slice: &'a [char], start: Option<usize>) -> Block<'a> {
         Block {
@@ -365,17 +374,79 @@ impl<'a> Block<'a> {
                 // the specified character was found, break
                 c if c == until => break,
                 // bracketed text
-                '{' => unimplemented!(),
+                '{' => {
+                    push_and_renew!(buffer: String::new(), text);
+                    self.text_until(text, '}')?;
+                }
                 // directive
-                ':' => unimplemented!(),
+                ':' => {
+                    push_and_renew!(buffer: String::new(), text);
+                    match self.directive()?.as_ref() {
+                        // cross reference
+                        "ref" => unimplemented!(),
+                        // link
+                        "link" => unimplemented!(),
+                        // replacement
+                        repl => unimplemented!(),
+                    }
+                }
                 // emphasis (semantic)
-                '*' => unimplemented!(),
+                '*' => {
+                    push_and_renew!(buffer: String::new(), text);
+                    match self.expect('*')? {
+                        // strong emphasis
+                        '*' => unimplemented!(),
+                        // match the string.
+                        _ => {
+                            // rewind
+                            self.idx -= 1;
+                            let mut inner = document::Text::new();
+                            self.text_until(&mut inner, '*')?;
+                            let emph = document::InlineType::Emphasis(inner);
+                            let mut common = document::InlineCommon::new();
+                            // we don't need to update `emph`, because it has no parameters of its
+                            // own
+                            update_multiple!(self, common);
+                            text.push((emph, common));
+                        }
+                    }
+                }
                 // italics/bold (non-semantic)
-                '_' => unimplemented!(),
+                '_' => {
+                    push_and_renew!(buffer: String::new(), text);
+                    match self.expect('_')? {
+                        // bold
+                        '_' => unimplemented!(),
+                        // match the string.
+                        _ => {
+                            // rewind
+                            self.idx -= 1;
+                            let mut inner = document::Text::new();
+                            self.text_until(&mut inner, '_')?;
+                            let it = document::InlineType::Italics(inner);
+                            let mut common = document::InlineCommon::new();
+                            // we don't need to update `it`, because it has no parameters of its
+                            // own
+                            update_multiple!(self, common);
+                            text.push((it, common));
+                        }
+                    }
+                }
                 // small caps
                 '^' => unimplemented!(),
                 // generic `span`
-                '`' => unimplemented!(),
+                '`' => {
+                    push_and_renew!(buffer: String::new(), text);
+                    let mut inner = document::Text::new();
+                    self.text_until(&mut inner, '`')?;
+                    let span = document::InlineType::Span(inner);
+                    let mut common = document::InlineCommon::new();
+                    // defaults to a class of "conlang"
+                    common.class = "conlang".into();
+                    // we don't need to update `span`, because it has no parameters of its own
+                    update_multiple!(self, common);
+                    text.push((span, common));
+                }
                 // escaped character
                 '\\' => buffer.push(self.expect_escaped()?),
                 // whitespace (only push one space, regardless of the amount or type of whitespace.
@@ -388,7 +459,7 @@ impl<'a> Block<'a> {
             }
         }
         if buffer.len() != 0 {
-            text.push(document::InlineType::Text(buffer));
+            text.push(buffer);
         }
         Ok(())
     }
