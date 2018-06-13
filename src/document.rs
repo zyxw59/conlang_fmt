@@ -339,8 +339,11 @@ pub struct Inline {
     pub class: String,
 }
 
-impl<'a> From<&'a str> for Inline {
-    fn from(s: &'a str) -> Inline {
+impl<T> From<T> for Inline
+where
+    T: Into<String>,
+{
+    fn from(s: T) -> Inline {
         Inline {
             kind: InlineType::Text(s.into()),
             class: Default::default(),

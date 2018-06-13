@@ -363,6 +363,43 @@ impl<'a> Block<'a> {
         self.end_of_block(EndOfBlockKind::Group)
     }
 
+    /// Creates a `document::Text` object from the remainder of the current line.
+    fn line_text(&mut self) -> EResult<document::Text> {
+        let mut vec = Vec::new();
+        let mut text = String::new();
+        while let Some(c) = self.next() {
+            match c {
+                // bracketed text
+                '{' => self.bracketed(&mut text)?,
+                // directive
+                ':' => unimplemented!(),
+                // emphasis (semantic)
+                '*' => unimplemented!(),
+                // italics/bold (non-semantic)
+                '_' => unimplemented!(),
+                // small caps
+                '^' => unimplemented!(),
+                // generic `span`
+                '`' => unimplemented!(),
+                // end of line
+                '\n' => break,
+                // escaped character
+                '\\' => text.push(self.expect()?),
+                // whitespace (only push one space, regardless of the amount or type of whitespace.
+                c if c.is_whitespace() => {
+                    self.skip_whitespace();
+                    text.push(' ');
+                }
+                // anything else
+                _ => text.push(c),
+            }
+        }
+        if text.len() != 0 {
+            vec.push(document::Inline::from(text));
+        }
+        Ok(document::Text(vec))
+    }
+
     /// Returns the next character, or an error if the end of the block is reached.
     fn expect(&mut self) -> EResult<char> {
         match self.next() {
