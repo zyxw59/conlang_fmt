@@ -76,10 +76,6 @@ impl ErrorKind {
 pub enum EndOfBlockKind {
     #[fail(display = "expected a character after `\\`")]
     Escape,
-    #[fail(display = "expected `}}`")]
-    Group,
-    #[fail(display = "expected `]`")]
-    Parameter,
-    #[fail(display = "expected `:`")]
-    Directive,
+    #[fail(display = "expected `{}`", _0)]
+    Expect(char),
 }

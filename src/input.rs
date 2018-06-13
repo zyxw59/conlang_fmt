@@ -186,23 +186,14 @@ impl<'a> Block<'a> {
 
     /// Returns a directive as a string, assuming the first `:` has already been parsed.
     fn directive(&mut self) -> EResult<String> {
-        let start = self.index();
-        while let Some(c) = self.next() {
-            match c {
-                ':' => {
-                    let end = self.index();
-                    return Ok(self[start..end].iter().collect());
-                }
-                '\\' => {
-                    self.idx += 1;
-                }
-                '\n' => {
-                    break;
-                }
-                _ => {}
+        let mut directive = String::new();
+        loop {
+            match self.expect(':')? {
+                ':' => return Ok(directive),
+                '\\' => directive.push(self.expect_escaped()?),
+                c => directive.push(c),
             }
         }
-        self.end_of_block(EndOfBlockKind::Directive)
     }
 
     /// Returns a list of parameters. If a parameter list isn't present, returns an empty list.
@@ -217,23 +208,20 @@ impl<'a> Block<'a> {
                 self.skip_whitespace();
                 // loop over arguments
                 loop {
-                    match self.peek() {
+                    match self.expect(']')? {
                         // end of the parameter list
-                        Some(']') => {
-                            self.idx += 1;
-                            return Ok(params);
-                        }
+                        ']' => return Ok(params),
                         // something else: it's a parameter
-                        Some(_) => {
+                        _ => {
+                            // rewind, since the character we matched might be part of the
+                            // parameter.
+                            self.idx -= 1;
                             self.parameter()?.map(|p| params.push(p));
-                        }
-                        // end of input!
-                        None => {
-                            return self.end_of_block(EndOfBlockKind::Parameter);
                         }
                     }
                 }
             }
+            // no parameter list, return an empty list
             _ => Ok(params),
         }
     }
@@ -259,7 +247,10 @@ impl<'a> Block<'a> {
                 // get the next character, whatever it may be.
                 '\\' => {
                     self.idx += 1;
-                    param_builder.last_mut().unwrap().push(self.expect()?);
+                    param_builder
+                        .last_mut()
+                        .unwrap()
+                        .push(self.expect_escaped()?);
                 }
                 // bracketed text
                 '{' => {
@@ -320,7 +311,10 @@ impl<'a> Block<'a> {
                 // get the next character, whatever it may be.
                 '\\' => {
                     self.idx += 1;
-                    param_builder.last_mut().unwrap().push(self.expect()?);
+                    param_builder
+                        .last_mut()
+                        .unwrap()
+                        .push(self.expect_escaped()?);
                 }
                 // bracketed text
                 '{' => {
@@ -350,17 +344,16 @@ impl<'a> Block<'a> {
     /// Pushes contents of a `{}`-delimited group to the given buffer, assuming the first `{` has
     /// already been matched.
     fn bracketed(&mut self, buffer: &mut String) -> EResult<()> {
-        while let Some(c) = self.next() {
-            match c {
+        loop {
+            match self.expect('}')? {
                 // done
                 '}' => return Ok(()),
                 // get the next character, whatever it may be.
-                '\\' => buffer.push(self.expect()?),
+                '\\' => buffer.push(self.expect_escaped()?),
                 // otherwise, just push whatever we see.
-                _ => buffer.push(c),
+                c => buffer.push(c),
             }
         }
-        self.end_of_block(EndOfBlockKind::Group)
     }
 
     /// Creates a `document::Text` object from the remainder of the current line.
@@ -384,7 +377,7 @@ impl<'a> Block<'a> {
                 // end of line
                 '\n' => break,
                 // escaped character
-                '\\' => text.push(self.expect()?),
+                '\\' => text.push(self.expect_escaped()?),
                 // whitespace (only push one space, regardless of the amount or type of whitespace.
                 c if c.is_whitespace() => {
                     self.skip_whitespace();
@@ -400,8 +393,18 @@ impl<'a> Block<'a> {
         Ok(document::Text(vec))
     }
 
-    /// Returns the next character, or an error if the end of the block is reached.
-    fn expect(&mut self) -> EResult<char> {
+    /// Returns the next character, or an error reporting which character is missing if the end of
+    /// the block is reached.
+    fn expect(&mut self, expected: char) -> EResult<char> {
+        match self.next() {
+            Some(c) => Ok(c),
+            None => self.end_of_block(EndOfBlockKind::Expect(expected)),
+        }
+    }
+
+    /// Returns the next character, or an error reporting that a character was expected if the end
+    /// of the block is reached.
+    fn expect_escaped(&mut self) -> EResult<char> {
         match self.next() {
             Some(c) => Ok(c),
             None => self.end_of_block(EndOfBlockKind::Escape),
