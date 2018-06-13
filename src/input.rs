@@ -356,14 +356,16 @@ impl<'a> Block<'a> {
         }
     }
 
-    /// Creates a `document::Text` object from the remainder of the current line.
-    fn line_text(&mut self) -> EResult<document::Text> {
-        let mut vec = Vec::new();
-        let mut text = String::new();
+    /// Appends elements to the given `document::Text` object up until the next occurance of the
+    /// specified `char` not contained in another element.
+    fn text_until(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
+        let mut buffer = String::new();
         while let Some(c) = self.next() {
             match c {
+                // the specified character was found, break
+                c if c == until => break,
                 // bracketed text
-                '{' => self.bracketed(&mut text)?,
+                '{' => unimplemented!(),
                 // directive
                 ':' => unimplemented!(),
                 // emphasis (semantic)
@@ -374,23 +376,21 @@ impl<'a> Block<'a> {
                 '^' => unimplemented!(),
                 // generic `span`
                 '`' => unimplemented!(),
-                // end of line
-                '\n' => break,
                 // escaped character
-                '\\' => text.push(self.expect_escaped()?),
+                '\\' => buffer.push(self.expect_escaped()?),
                 // whitespace (only push one space, regardless of the amount or type of whitespace.
                 c if c.is_whitespace() => {
                     self.skip_whitespace();
-                    text.push(' ');
+                    buffer.push(' ');
                 }
                 // anything else
-                _ => text.push(c),
+                _ => buffer.push(c),
             }
         }
-        if text.len() != 0 {
-            vec.push(document::Inline::from(text));
+        if buffer.len() != 0 {
+            text.push(document::InlineType::Text(buffer));
         }
-        Ok(document::Text(vec))
+        Ok(())
     }
 
     /// Returns the next character, or an error reporting which character is missing if the end of

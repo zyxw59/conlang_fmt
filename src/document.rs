@@ -327,9 +327,27 @@ impl Default for Gloss {
 #[derive(Debug, Default)]
 pub struct Text(pub Vec<Inline>);
 
-impl<'a> From<&'a str> for Text {
-    fn from(s: &'a str) -> Text {
-        Text(vec![s.into()])
+impl Text {
+    pub fn new() -> Text {
+        Default::default()
+    }
+
+    pub fn push<T>(&mut self, element: T)
+    where
+        T: Into<Inline>,
+    {
+        self.0.push(element.into());
+    }
+}
+
+impl<T> From<T> for Text
+where
+    T: Into<String>,
+{
+    fn from(s: T) -> Text {
+        let mut t = Text::new();
+        t.push(InlineType::Text(s.into()));
+        t
     }
 }
 
@@ -339,14 +357,24 @@ pub struct Inline {
     pub class: String,
 }
 
-impl<T> From<T> for Inline
-where
-    T: Into<String>,
-{
-    fn from(s: T) -> Inline {
-        Inline {
-            kind: InlineType::Text(s.into()),
-            class: Default::default(),
+impl From<(InlineType, String)> for Inline {
+    fn from((kind, class): (InlineType, String)) -> Inline {
+        Inline { kind, class }
+    }
+}
+
+impl From<InlineType> for Inline {
+    fn from(kind: InlineType) -> Inline {
+        match kind {
+            // a plain `span` has a default class of `conlang`.
+            InlineType::Span(_) => Inline {
+                kind,
+                class: "conlang".into(),
+            },
+            _ => Inline {
+                kind,
+                class: String::new(),
+            },
         }
     }
 }
