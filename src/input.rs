@@ -68,6 +68,51 @@ pub struct Block<'a> {
     idx: usize,
 }
 
+/// Update each object `$x` in order with the parameters returned by `$self.parameters()?`.
+///
+/// Uses `$self` to raise appropriate errors.
+///
+/// Panics if no argument in `$x` handles all cases where the parameter name is `None`.
+macro_rules! update_multiple {
+    ( $self:ident, $( $x:expr ),* ) => {
+        {
+            for param in $self.parameters()? {
+                // `update_one!` does the heavy lifting.
+                update_one!($self, param, $( $x ),*);
+            }
+        }
+    }
+}
+
+/// Updates each object `$first, $x..` in order with the parameter `$param`.
+///
+/// If the parameter is returned by `$first`, move on to the first `$x`. If it is returned by
+/// `$last`, raise an error by calling `$self.parameter_error(param.0.unwrap())?`.
+///
+/// Panics if no argument handles all cases where the parameter name is `None`.
+macro_rules! update_one {
+    ( $self:ident, $param:expr, $first: expr, $( $x:expr ),* ) => {
+        {
+            match $first.update_param($param)? {
+                // if the parameter is returned, try the next argument.
+                Some(param) => update_one!($self, param, $( $x ),*),
+                // otherwise, we're done.
+                None => {}
+            }
+        }
+    };
+    ( $self:ident, $param:expr, $last:expr ) => {
+        {
+            match $last.update_param($param)? {
+                // we can unwrap because `common` will always catch the `None` case
+                // (and treat it as a class).
+                Some(param) => $self.parameter_error(param.0.unwrap())?,
+                None => {}
+            }
+        }
+    };
+}
+
 impl<'a> Block<'a> {
     pub fn new(slice: &'a [char], start: Option<usize>) -> Block<'a> {
         Block {
@@ -84,17 +129,37 @@ impl<'a> Block<'a> {
         // save the position of the first non-whitespace character; if we need to rewind, this is
         // where we should go.
         let start = self.idx;
-        let mut block_type = match self.next() {
+        let mut block = match self.next() {
             Some(':') => match self.directive()?.as_ref() {
-                "toc" => document::BlockType::contents(),
-                "list" => document::BlockType::list(),
-                "table" => document::BlockType::table(),
-                "gloss" => document::BlockType::gloss(),
+                "toc" => {
+                    let mut toc = document::Contents::new();
+                    let mut common = document::BlockCommon::new();
+                    update_multiple!(self, toc, common);
+                    unimplemented!();
+                }
+                "list" => {
+                    let mut list = document::List::new();
+                    let mut common = document::BlockCommon::new();
+                    update_multiple!(self, list, common);
+                    unimplemented!();
+                }
+                "table" => {
+                    let mut table = document::Table::new();
+                    let mut common = document::BlockCommon::new();
+                    update_multiple!(self, table, common);
+                    unimplemented!();
+                }
+                "gloss" => {
+                    let mut gloss = document::Gloss::new();
+                    let mut common = document::BlockCommon::new();
+                    update_multiple!(self, gloss, common);
+                    unimplemented!();
+                }
                 _ => {
                     // this directive is an inline directive; rewind and parse the block as a
                     // paragraph
                     self.idx = start;
-                    document::BlockType::paragraph()
+                    unimplemented!();
                 }
             },
             Some('#') => {
@@ -104,10 +169,11 @@ impl<'a> Block<'a> {
                 let level = self.idx - start;
                 // then rewind one character, we don't want to eat the character _after_ the `#`s.
                 self.idx -= 1;
-                document::BlockType::Heading(document::Heading {
-                    level,
-                    ..Default::default()
-                })
+                let mut heading = document::Heading::new();
+                heading.level = level;
+                let mut common = document::BlockCommon::new();
+                update_multiple!(self, heading, common);
+                unimplemented!();
             }
             Some(_) => {
                 self.idx = start;
@@ -308,6 +374,13 @@ impl<'a> Block<'a> {
     /// Returns an `EndOfBlock` error, wrapped in a `Block` error and a `Result`
     fn end_of_block<T>(&self, kind: EndOfBlockKind) -> EResult<T> {
         Err(ErrorKind::EndOfBlock(kind)
+            .context(ErrorKind::Block(self.start.unwrap()))
+            .into())
+    }
+
+    /// Returns a `Parameter` error, wrapped in a `Block` error and a `Result`
+    fn parameter_error<T>(&self, parameter: String) -> EResult<T> {
+        Err(ErrorKind::Parameter(parameter)
             .context(ErrorKind::Block(self.start.unwrap()))
             .into())
     }

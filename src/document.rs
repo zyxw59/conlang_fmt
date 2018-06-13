@@ -47,6 +47,10 @@ pub struct BlockCommon {
 }
 
 impl BlockCommon {
+    pub fn new() -> BlockCommon {
+        Default::default()
+    }
+
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
@@ -121,6 +125,10 @@ pub struct Heading {
 }
 
 impl Heading {
+    pub fn new() -> Heading {
+        Default::default()
+    }
+
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
@@ -159,6 +167,10 @@ pub struct Contents {
 }
 
 impl Contents {
+    pub fn new() -> Contents {
+        Default::default()
+    }
+
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
@@ -187,6 +199,10 @@ pub struct List {
 }
 
 impl List {
+    pub fn new() -> List {
+        Default::default()
+    }
+
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
@@ -217,6 +233,10 @@ pub struct Table {
 }
 
 impl Table {
+    pub fn new() -> Table {
+        Default::default()
+    }
+
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
@@ -273,6 +293,10 @@ pub struct Gloss {
 }
 
 impl Gloss {
+    pub fn new() -> Gloss {
+        Default::default()
+    }
+
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
