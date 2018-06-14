@@ -53,6 +53,8 @@ pub enum ErrorKind {
     Block(usize),
     #[fail(display = "Unexpected end of block, {}", _0)]
     EndOfBlock(EndOfBlockKind),
+    #[fail(display = "Expected `{}`, got `{}`", _0, _1)]
+    Expected(char, char),
     #[fail(display = "Parsing error")]
     Parse,
     #[fail(display = "Unknown parameter {}", _0)]

@@ -383,57 +383,99 @@ impl<'a> Block<'a> {
                     push_and_renew!(buffer: String::new(), text);
                     match self.directive()?.as_ref() {
                         // cross reference
-                        "ref" => unimplemented!(),
+                        "ref" => {
+                            let mut element = document::InlineType::reference();
+                            let mut common = document::InlineCommon::new();
+                            update_multiple!(self, element, common);
+                            text.push((element, common));
+                        }
                         // link
-                        "link" => unimplemented!(),
+                        "link" => {
+                            let mut element = document::InlineType::link();
+                            let mut common = document::InlineCommon::new();
+                            update_multiple!(self, element, common);
+                            text.push((element, common));
+                        }
                         // replacement
-                        repl => unimplemented!(),
+                        repl => {
+                            let element = document::InlineType::Replace(repl.into());
+                            let mut common = document::InlineCommon::new();
+                            // we don't need to update `element`, because it has no parameters of
+                            // its own
+                            update_multiple!(self, common);
+                            text.push((element, common));
+                        }
                     }
                 }
                 // emphasis (semantic)
                 '*' => {
                     push_and_renew!(buffer: String::new(), text);
-                    match self.expect('*')? {
+                    let emph = match self.expect('*')? {
                         // strong emphasis
-                        '*' => unimplemented!(),
+                        '*' => {
+                            let mut inner = document::Text::new();
+                            self.text_until(&mut inner, '*')?;
+                            // if the next character is not '*', there was a stray single '*',
+                            // which is an error.
+                            self.expect_exact('*')?;
+                            document::InlineType::Strong(inner)
+                        }
                         // match the string.
                         _ => {
                             // rewind
                             self.idx -= 1;
                             let mut inner = document::Text::new();
                             self.text_until(&mut inner, '*')?;
-                            let emph = document::InlineType::Emphasis(inner);
-                            let mut common = document::InlineCommon::new();
-                            // we don't need to update `emph`, because it has no parameters of its
-                            // own
-                            update_multiple!(self, common);
-                            text.push((emph, common));
+                            document::InlineType::Emphasis(inner)
                         }
-                    }
+                    };
+                    let mut common = document::InlineCommon::new();
+                    // we don't need to update `emph`, because it has no parameters of its
+                    // own
+                    update_multiple!(self, common);
+                    text.push((emph, common));
                 }
                 // italics/bold (non-semantic)
                 '_' => {
                     push_and_renew!(buffer: String::new(), text);
-                    match self.expect('_')? {
+                    let span = match self.expect('_')? {
                         // bold
-                        '_' => unimplemented!(),
+                        '_' => {
+                            let mut inner = document::Text::new();
+                            self.text_until(&mut inner, '_')?;
+                            // if the next character is not '_', there was a stray single '_',
+                            // which is an error.
+                            self.expect_exact('_')?;
+                            document::InlineType::Bold(inner)
+                        }
                         // match the string.
                         _ => {
                             // rewind
                             self.idx -= 1;
                             let mut inner = document::Text::new();
                             self.text_until(&mut inner, '_')?;
-                            let it = document::InlineType::Italics(inner);
-                            let mut common = document::InlineCommon::new();
-                            // we don't need to update `it`, because it has no parameters of its
-                            // own
-                            update_multiple!(self, common);
-                            text.push((it, common));
+                            document::InlineType::Italics(inner)
                         }
-                    }
+                    };
+                    let mut common = document::InlineCommon::new();
+                    // we don't need to update `span`, because it has no parameters of its
+                    // own
+                    update_multiple!(self, common);
+                    text.push((span, common));
                 }
                 // small caps
-                '^' => unimplemented!(),
+                '^' => {
+                    push_and_renew!(buffer: String::new(), text);
+                    // rewind
+                    let mut inner = document::Text::new();
+                    self.text_until(&mut inner, '^')?;
+                    let span = document::InlineType::SmallCaps(inner);
+                    let mut common = document::InlineCommon::new();
+                    // we don't need to update `span`, because it has no parameters of its
+                    // own
+                    update_multiple!(self, common);
+                    text.push((span, common));
+                }
                 // generic `span`
                 '`' => {
                     push_and_renew!(buffer: String::new(), text);
@@ -479,6 +521,18 @@ impl<'a> Block<'a> {
         match self.next() {
             Some(c) => Ok(c),
             None => self.end_of_block(EndOfBlockKind::Escape),
+        }
+    }
+
+    /// Returns an error if the next character is not the specified character, or if the end of the
+    /// block is reached.
+    fn expect_exact(&mut self, expected: char) -> EResult<()> {
+        match self.next() {
+            Some(c) if c == expected => Ok(()),
+            Some(c) => Err(ErrorKind::Expected(expected, c)
+                .context(ErrorKind::Block(self.start.unwrap()))
+                .into()),
+            None => self.end_of_block(EndOfBlockKind::Expect(expected)),
         }
     }
 

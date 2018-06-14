@@ -422,6 +422,14 @@ pub enum InlineType {
 }
 
 impl InlineType {
+    pub fn link() -> InlineType {
+        InlineType::Link(Default::default())
+    }
+
+    pub fn reference() -> InlineType {
+        InlineType::Reference(Default::default())
+    }
+
     pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match *self {
             InlineType::Reference(ref mut s) => match param.0.as_ref().map(|p| p.as_ref()) {
