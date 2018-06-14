@@ -379,7 +379,8 @@ impl<'a> Block<'a> {
 
     /// Appends elements to the given `document::Text` object up until the end of the block.
     fn text_rest(&mut self, text: &mut document::Text) -> EResult<()> {
-        self.text_until(text, |_| true)
+        // never break
+        self.text_until(text, |_| false)
     }
 
     /// Appends elements to the given `document::Text` object up until the next occurance of the
