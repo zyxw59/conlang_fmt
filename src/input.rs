@@ -365,8 +365,18 @@ impl<'a> Block<'a> {
         }
     }
 
+    /// Appends elements to the given `document::Text` object up until the end of the block.
+    fn text_rest(&mut self, text: &mut document::Text) -> EResult<()> {
+        // when we reach the end of the block, `self.peek()` will return `None`
+        while let Some(_) = self.peek() {
+            // read line-by-line
+            self.text_until(text, '\n')?;
+        }
+        Ok(())
+    }
+
     /// Appends elements to the given `document::Text` object up until the next occurance of the
-    /// specified `char` not contained in another element.
+    /// specified `char` not contained in another element, or until the end of the block.
     fn text_until(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
         let mut buffer = String::new();
         while let Some(c) = self.next() {
