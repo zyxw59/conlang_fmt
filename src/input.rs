@@ -379,26 +379,31 @@ impl<'a> Block<'a> {
 
     /// Appends elements to the given `document::Text` object up until the end of the block.
     fn text_rest(&mut self, text: &mut document::Text) -> EResult<()> {
-        // when we reach the end of the block, `self.peek()` will return `None`
-        while let Some(_) = self.peek() {
-            // read line-by-line
-            self.text_until(text, '\n')?;
-        }
-        Ok(())
+        self.text_until(text, |_| true)
     }
 
     /// Appends elements to the given `document::Text` object up until the next occurance of the
     /// specified `char` not contained in another element, or until the end of the block.
-    fn text_until(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
+    fn text_until_char(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
+        self.text_until(text, |c| c == until)
+    }
+
+    /// Appends elements to the given `document::Text` object up until the character matching the
+    /// specified predicate not contained in another element, or until the end of the block.
+    fn text_until(
+        &mut self,
+        text: &mut document::Text,
+        predicate: impl Fn(char) -> bool,
+    ) -> EResult<()> {
         let mut buffer = String::new();
         while let Some(c) = self.next() {
             match c {
                 // the specified character was found, break
-                c if c == until => break,
+                c if predicate(c) => break,
                 // bracketed text
                 '{' => {
                     push_and_renew!(buffer: String::new(), text);
-                    self.text_until(text, '}')?;
+                    self.text_until_char(text, '}')?;
                 }
                 // directive
                 ':' => {
@@ -436,7 +441,7 @@ impl<'a> Block<'a> {
                         // strong emphasis
                         '*' => {
                             let mut inner = document::Text::new();
-                            self.text_until(&mut inner, '*')?;
+                            self.text_until_char(&mut inner, '*')?;
                             // if the next character is not '*', there was a stray single '*',
                             // which is an error.
                             self.expect_exact('*')?;
@@ -447,7 +452,7 @@ impl<'a> Block<'a> {
                             // rewind
                             self.idx -= 1;
                             let mut inner = document::Text::new();
-                            self.text_until(&mut inner, '*')?;
+                            self.text_until_char(&mut inner, '*')?;
                             document::InlineType::Emphasis(inner)
                         }
                     };
@@ -464,7 +469,7 @@ impl<'a> Block<'a> {
                         // bold
                         '_' => {
                             let mut inner = document::Text::new();
-                            self.text_until(&mut inner, '_')?;
+                            self.text_until_char(&mut inner, '_')?;
                             // if the next character is not '_', there was a stray single '_',
                             // which is an error.
                             self.expect_exact('_')?;
@@ -475,7 +480,7 @@ impl<'a> Block<'a> {
                             // rewind
                             self.idx -= 1;
                             let mut inner = document::Text::new();
-                            self.text_until(&mut inner, '_')?;
+                            self.text_until_char(&mut inner, '_')?;
                             document::InlineType::Italics(inner)
                         }
                     };
@@ -490,7 +495,7 @@ impl<'a> Block<'a> {
                     push_and_renew!(buffer: String::new(), text);
                     // rewind
                     let mut inner = document::Text::new();
-                    self.text_until(&mut inner, '^')?;
+                    self.text_until_char(&mut inner, '^')?;
                     let span = document::InlineType::SmallCaps(inner);
                     let mut common = document::InlineCommon::new();
                     // we don't need to update `span`, because it has no parameters of its
@@ -502,7 +507,7 @@ impl<'a> Block<'a> {
                 '`' => {
                     push_and_renew!(buffer: String::new(), text);
                     let mut inner = document::Text::new();
-                    self.text_until(&mut inner, '`')?;
+                    self.text_until_char(&mut inner, '`')?;
                     let span = document::InlineType::Span(inner);
                     let mut common = document::InlineCommon::new();
                     // defaults to a class of "conlang"
