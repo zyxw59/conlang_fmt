@@ -393,8 +393,25 @@ impl<'a> Block<'a> {
     /// `\n::` not contained in another element, or until the end of the block.
     fn text_until_hard_line(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
         self.text_until(text, |c| {
-            // match newline,           then `:`,                   then `:`
-            c == '\n' && self.next() == Some(':') && self.next() == Some(':')
+            let start = self.idx;
+            // match the newline, and then...
+            c == '\n' && match self.next() {
+                // match the first colon
+                Some(':') => match self.next() {
+                    // match the second colon: we're done
+                    Some(':') => true,
+                    // otherwise, rewind to before we manually advanced the iterator
+                    _ => {
+                        self.idx = start;
+                        false
+                    }
+                },
+                // rewind to before we manually advanced the iterator
+                _ => {
+                    self.idx = start;
+                    false
+                }
+            }
         })
     }
 
