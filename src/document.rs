@@ -40,6 +40,15 @@ impl Block {
     }
 }
 
+impl From<Text> for Block {
+    fn from(t: Text) -> Block {
+        Block {
+            kind: BlockType::Paragraph(t),
+            common: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct BlockCommon {
     pub class: String,

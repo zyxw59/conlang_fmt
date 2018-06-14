@@ -144,7 +144,11 @@ impl<'a> Block<'a> {
                     let mut toc = document::Contents::new();
                     let mut common = document::BlockCommon::new();
                     update_multiple!(self, toc, common);
-                    unimplemented!();
+                    self.text_rest(&mut toc.title)?;
+                    document::Block {
+                        kind: document::BlockType::Contents(toc),
+                        common,
+                    }
                 }
                 "list" => {
                     let mut list = document::List::new();
@@ -168,7 +172,9 @@ impl<'a> Block<'a> {
                     // this directive is an inline directive; rewind and parse the block as a
                     // paragraph
                     self.idx = start;
-                    unimplemented!();
+                    let mut text = document::Text::new();
+                    self.text_rest(&mut text)?;
+                    text.into()
                 }
             },
             Some('#') => {
@@ -186,7 +192,9 @@ impl<'a> Block<'a> {
             }
             Some(_) => {
                 self.idx = start;
-                document::BlockType::paragraph()
+                let mut text = document::Text::new();
+                self.text_rest(&mut text)?;
+                text.into()
             }
             None => return Ok(None),
         };
