@@ -174,10 +174,16 @@ Inline elements can be included inline in text.
   text with `_` (a single underscore).
 - Bold (formatting only, without semantics) is indicated by surrounding the
   text with `__` (two underscores).
-- Small caps is indicated by surrounding the text with `^^`.
+- Small caps is indicated by surrounding the text with `^`.
 - A generic `<span>` element is indicated by surrounding the text with `` ` ``.
 
 In each of these cases, parameters come directly after the closing delimiter.
+
+Formatting elements which use different markers (e.g. emphasis (`*`) and small
+caps (`^`)) can be freely nested.
+However, to include a formatting element directly inside another which uses the
+_same_ marker (e.g. emphasis (`*`) and strong emphasis (`**`)), the inner
+element must be surrounded by `{` `}`.
 
 ##### Parameters
 
@@ -193,7 +199,7 @@ replacement, followed by the replacement text, which may
 itself contain replacements (or any other inline formatting).
 In the text, a replacement is denoted by the directive declared in the
 `:replace:` block.
-Text replacements do not take any parameters.
+Text replacements do not take any parameters other than the `class` parameter.
 
 #### Cross references (`:ref:`)
 
