@@ -188,7 +188,11 @@ impl<'a> Block<'a> {
                 heading.level = level;
                 let mut common = document::BlockCommon::new();
                 update_multiple!(self, heading, common);
-                unimplemented!();
+                self.text_rest(&mut heading.title)?;
+                document::Block {
+                    kind: document::BlockType::Heading(heading),
+                    common,
+                }
             }
             Some(_) => {
                 self.idx = start;
