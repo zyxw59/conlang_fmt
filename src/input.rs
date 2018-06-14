@@ -389,6 +389,15 @@ impl<'a> Block<'a> {
         self.text_until(text, |c| c == until)
     }
 
+    /// Appends elements to the given `document::Text` object up until the next occurrance of
+    /// `\n::` not contained in another element, or until the end of the block.
+    fn text_until_hard_line(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
+        self.text_until(text, |c| {
+            // match newline,           then `:`,                   then `:`
+            c == '\n' && self.next() == Some(':') && self.next() == Some(':')
+        })
+    }
+
     /// Appends elements to the given `document::Text` object up until the character matching the
     /// specified predicate not contained in another element, or until the end of the block.
     fn text_until(
