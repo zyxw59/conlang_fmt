@@ -391,28 +391,25 @@ impl<'a> Block<'a> {
 
     /// Appends elements to the given `document::Text` object up until the next occurrance of
     /// `\n::` not contained in another element, or until the end of the block.
-    fn text_until_hard_line(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
-        self.text_until(text, |c| {
-            let start = self.idx;
-            // match the newline, and then...
-            c == '\n' && match self.next() {
-                // match the first colon
-                Some(':') => match self.next() {
-                    // match the second colon: we're done
-                    Some(':') => true,
-                    // otherwise, rewind to before we manually advanced the iterator
-                    _ => {
-                        self.idx = start;
-                        false
-                    }
+    fn text_until_hard_line(&mut self, text: &mut document::Text) -> EResult<()> {
+        loop {
+            self.text_until_char(text, '\n')?;
+            // we just matched a '\n', or the end of the line.
+            // now check if we have a ':'
+            match self.peek() {
+                // success, now check the next one.
+                Some(':') => match self.get(self.idx + 1) {
+                    // success; return
+                    Some(':') => return Ok(()),
+                    // nope; continue
+                    _ => {}
                 },
-                // rewind to before we manually advanced the iterator
-                _ => {
-                    self.idx = start;
-                    false
-                }
+                // not a colon, but the end of the block. we're definitely done
+                None => return Ok(()),
+                // something else; continue
+                _ => {}
             }
-        })
+        }
     }
 
     /// Appends elements to the given `document::Text` object up until the character matching the
