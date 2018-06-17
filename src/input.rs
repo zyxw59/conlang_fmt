@@ -615,7 +615,7 @@ impl<'a> Block<'a> {
 
     /// Peeks at the next character in the block, without advancing the iterator.
     pub fn peek(&self) -> Option<char> {
-        self.slice.get(self.idx + 1).cloned()
+        self.slice.get(self.idx).cloned()
     }
 
     /// Skips until the next non-whitespace character.
@@ -642,8 +642,9 @@ impl<'a> Iterator for Block<'a> {
     type Item = char;
 
     fn next(&mut self) -> Option<char> {
+        let c = self.slice.get(self.idx).cloned();
         self.idx += 1;
-        self.slice.get(self.idx).cloned()
+        c
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -738,5 +739,19 @@ mod tests {
             assert_eq!(block.len(), 0);
             assert_eq!(block.start(), None);
         }
+    }
+
+    #[test]
+    fn block_iter() {
+        let input_str = r#"block 1, line 1
+        block 1, line 2
+        block 1, line 3
+        "#.as_bytes();
+
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        assert_eq!(block.start(), Some(0));
+        assert_eq!(block.peek(), Some('b'));
+        assert_eq!(block.next(), Some('b'));
     }
 }
