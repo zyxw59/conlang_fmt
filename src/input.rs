@@ -380,37 +380,29 @@ impl<'a> Block<'a> {
     /// Appends elements to the given `document::Text` object up until the end of the block.
     fn text_rest(&mut self, text: &mut document::Text) -> EResult<()> {
         // never break
-        self.text_until(text, |_| false)
+        self.text_until(text, |_, _| false)
     }
 
     /// Appends elements to the given `document::Text` object up until the next occurance of the
     /// specified `char` not contained in another element, or until the end of the block.
     fn text_until_char(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
-        self.text_until(text, |c| c == until)
+        self.text_until(text, |_, c| c == until)
     }
 
     /// Appends elements to the given `document::Text` object up until the next occurrance of
-    /// `\n::` not contained in another element, or until the end of the block.
+    /// `\n::` not contained in another element, or until the end of the block. The iterator will
+    /// point at the first colon.
     fn text_until_hard_line(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
-        self.text_until(text, |c| {
-            let start = self.idx;
+        self.text_until(text, |slf, c| {
             // match the newline, and then...
-            c == '\n' && match self.next() {
+            c == '\n' && match slf.get(slf.idx + 1) {
                 // match the first colon
-                Some(':') => match self.next() {
+                Some(':') => match slf.get(slf.idx + 2) {
                     // match the second colon: we're done
                     Some(':') => true,
-                    // otherwise, rewind to before we manually advanced the iterator
-                    _ => {
-                        self.idx = start;
-                        false
-                    }
+                    _ => false,
                 },
-                // rewind to before we manually advanced the iterator
-                _ => {
-                    self.idx = start;
-                    false
-                }
+                _ => false,
             }
         })
     }
@@ -420,13 +412,13 @@ impl<'a> Block<'a> {
     fn text_until(
         &mut self,
         text: &mut document::Text,
-        predicate: impl Fn(char) -> bool,
+        predicate: impl Fn(&Self, char) -> bool,
     ) -> EResult<()> {
         let mut buffer = String::new();
         while let Some(c) = self.next() {
             match c {
                 // the specified character was found, break
-                c if predicate(c) => break,
+                c if predicate(self, c) => break,
                 // bracketed text
                 '{' => {
                     push_and_renew!(buffer: String::new(), text);
