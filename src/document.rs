@@ -230,7 +230,13 @@ impl List {
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct ListItem {
     pub text: Text,
-    pub sublist: Option<List>,
+    pub sublist: Vec<ListItem>,
+}
+
+impl ListItem {
+    pub fn new() -> ListItem {
+        Default::default()
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

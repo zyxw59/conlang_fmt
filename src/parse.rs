@@ -102,7 +102,13 @@ impl<'a> Block<'a> {
                     let mut list = document::List::new();
                     let mut common = document::BlockCommon::new();
                     update_multiple!(self, list, common);
-                    unimplemented!();
+                    while self.idx <= self.len() {
+                        self.list_tree(0, &mut list.items)?;
+                    }
+                    document::Block {
+                        kind: document::BlockType::List(list),
+                        common,
+                    }
                 }
                 "table" => {
                     let mut table = document::Table::new();
@@ -151,6 +157,24 @@ impl<'a> Block<'a> {
             None => return Ok(None),
         };
         unimplemented!()
+    }
+
+    /// Recursively appends list items to the given vector
+    fn list_tree(
+        &mut self,
+        last_indent: usize,
+        parent: &mut Vec<document::ListItem>,
+    ) -> EResult<()> {
+        loop {
+            let indent = self.skip_whitespace_virtual() - self.idx;
+            if indent <= last_indent {
+                return Ok(());
+            }
+            let mut item = document::ListItem::new();
+            self.text_until_hard_line(&mut item.text)?;
+            self.list_tree(indent, &mut item.sublist)?;
+            parent.push(item);
+        }
     }
 
     /// Returns a directive as a string, assuming the first `:` has already been parsed.
@@ -341,7 +365,7 @@ impl<'a> Block<'a> {
     /// at the start of a line (ignoring whitespace), not contained in another element, or until
     /// the end of the block. The iterator will point at the first character of the line, which is
     /// either whitespace or the first colon.
-    fn text_until_hard_line(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
+    fn text_until_hard_line(&mut self, text: &mut document::Text) -> EResult<()> {
         self.text_until(text, |slf, c| {
             let idx = slf.skip_whitespace_virtual();
             // match the newline, and then...
@@ -377,87 +401,32 @@ impl<'a> Block<'a> {
                 // directive
                 ':' => {
                     push_and_renew!(buffer: String::new(), text);
-                    match self.directive()?.as_ref() {
+                    text.push(match self.directive()?.as_ref() {
                         // cross reference
-                        "ref" => {
-                            let mut element = document::InlineType::reference();
-                            let mut common = document::InlineCommon::new();
-                            update_multiple!(self, element, common);
-                            text.push((element, common));
-                        }
+                        "ref" => self.simple_inline(document::InlineType::reference())?,
                         // link
-                        "link" => {
-                            let mut element = document::InlineType::link();
-                            let mut common = document::InlineCommon::new();
-                            update_multiple!(self, element, common);
-                            text.push((element, common));
-                        }
+                        "link" => self.simple_inline(document::InlineType::link())?,
                         // replacement
-                        repl => {
-                            let element = document::InlineType::Replace(repl.into());
-                            let mut common = document::InlineCommon::new();
-                            // we don't need to update `element`, because it has no parameters of
-                            // its own
-                            update_multiple!(self, common);
-                            text.push((element, common));
-                        }
-                    }
+                        repl => self.simple_inline(document::InlineType::Replace(repl.into()))?,
+                    });
                 }
                 // emphasis (semantic)
                 '*' => {
                     push_and_renew!(buffer: String::new(), text);
-                    let emph = match self.expect('*')? {
-                        // strong emphasis
-                        '*' => {
-                            let mut inner = document::Text::new();
-                            self.text_until_char(&mut inner, '*')?;
-                            // if the next character is not '*', there was a stray single '*',
-                            // which is an error.
-                            self.expect_exact('*')?;
-                            document::InlineType::Strong(inner)
-                        }
-                        // match the string.
-                        _ => {
-                            // rewind
-                            self.idx -= 1;
-                            let mut inner = document::Text::new();
-                            self.text_until_char(&mut inner, '*')?;
-                            document::InlineType::Emphasis(inner)
-                        }
-                    };
-                    let mut common = document::InlineCommon::new();
-                    // we don't need to update `emph`, because it has no parameters of its
-                    // own
-                    update_multiple!(self, common);
-                    text.push((emph, common));
+                    text.push(self.formatting_inline(
+                        '*',
+                        document::InlineType::Emphasis,
+                        document::InlineType::Strong,
+                    )?);
                 }
                 // italics/bold (non-semantic)
                 '_' => {
                     push_and_renew!(buffer: String::new(), text);
-                    let span = match self.expect('_')? {
-                        // bold
-                        '_' => {
-                            let mut inner = document::Text::new();
-                            self.text_until_char(&mut inner, '_')?;
-                            // if the next character is not '_', there was a stray single '_',
-                            // which is an error.
-                            self.expect_exact('_')?;
-                            document::InlineType::Bold(inner)
-                        }
-                        // match the string.
-                        _ => {
-                            // rewind
-                            self.idx -= 1;
-                            let mut inner = document::Text::new();
-                            self.text_until_char(&mut inner, '_')?;
-                            document::InlineType::Italics(inner)
-                        }
-                    };
-                    let mut common = document::InlineCommon::new();
-                    // we don't need to update `span`, because it has no parameters of its
-                    // own
-                    update_multiple!(self, common);
-                    text.push((span, common));
+                    text.push(self.formatting_inline(
+                        '*',
+                        document::InlineType::Emphasis,
+                        document::InlineType::Strong,
+                    )?);
                 }
                 // small caps
                 '^' => {
@@ -465,25 +434,21 @@ impl<'a> Block<'a> {
                     // rewind
                     let mut inner = document::Text::new();
                     self.text_until_char(&mut inner, '^')?;
-                    let span = document::InlineType::SmallCaps(inner);
-                    let mut common = document::InlineCommon::new();
-                    // we don't need to update `span`, because it has no parameters of its
-                    // own
-                    update_multiple!(self, common);
-                    text.push((span, common));
+                    let kind = document::InlineType::SmallCaps(inner);
+                    text.push(self.simple_inline(kind)?);
                 }
                 // generic `span`
                 '`' => {
                     push_and_renew!(buffer: String::new(), text);
                     let mut inner = document::Text::new();
                     self.text_until_char(&mut inner, '`')?;
-                    let span = document::InlineType::Span(inner);
+                    let kind = document::InlineType::Span(inner);
                     let mut common = document::InlineCommon::new();
                     // defaults to a class of "conlang"
                     common.class = "conlang".into();
                     // we don't need to update `span`, because it has no parameters of its own
                     update_multiple!(self, common);
-                    text.push((span, common));
+                    text.push(document::Inline { kind, common });
                 }
                 // escaped character
                 '\\' => buffer.push(self.expect_escaped()?),
@@ -500,6 +465,38 @@ impl<'a> Block<'a> {
             text.push(buffer);
         }
         Ok(())
+    }
+
+    fn simple_inline(&mut self, mut kind: document::InlineType) -> EResult<document::Inline> {
+        let mut common = document::InlineCommon::new();
+        update_multiple!(self, kind, common);
+        Ok(document::Inline { kind, common })
+    }
+
+    fn formatting_inline(
+        &mut self,
+        delim: char,
+        single: impl FnOnce(document::Text) -> document::InlineType,
+        double: impl FnOnce(document::Text) -> document::InlineType,
+    ) -> EResult<document::Inline> {
+        let kind = match self.expect(delim)? {
+            // double
+            c if c == delim => {
+                let mut text = document::Text::new();
+                self.text_until_char(&mut text, delim)?;
+                self.expect_exact(delim)?;
+                double(text)
+            }
+            // single
+            _ => {
+                // rewind
+                self.idx -= 1;
+                let mut text = document::Text::new();
+                self.text_until_char(&mut text, delim)?;
+                single(text)
+            }
+        };
+        self.simple_inline(kind)
     }
 
     /// Returns the next character, or an error reporting which character is missing if the end of
