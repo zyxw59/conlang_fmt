@@ -743,15 +743,46 @@ mod tests {
 
     #[test]
     fn block_iter() {
-        let input_str = r#"block 1, line 1
-        block 1, line 2
-        block 1, line 3
-        "#.as_bytes();
+        let input_str = r#"block 1, line 1"#.as_bytes();
 
         let mut input = Input::new(BufReader::new(input_str));
         let mut block = input.next_block().unwrap();
         assert_eq!(block.start(), Some(0));
         assert_eq!(block.peek(), Some('b'));
         assert_eq!(block.next(), Some('b'));
+    }
+
+    #[test]
+    fn text_emphasis() {
+        let input_str = r#"*emphasis*"#.as_bytes();
+
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        let mut text = document::Text::new();
+        assert!(block.text_rest(&mut text).is_ok());
+        assert_eq!(
+            text,
+            document::Text(vec![document::Inline {
+                kind: document::InlineType::Emphasis("emphasis".into()),
+                common: Default::default(),
+            }])
+        )
+    }
+
+    #[test]
+    fn text_strong() {
+        let input_str = r#"**strong**"#.as_bytes();
+
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        let mut text = document::Text::new();
+        assert!(block.text_rest(&mut text).is_ok());
+        assert_eq!(
+            text,
+            document::Text(vec![document::Inline {
+                kind: document::InlineType::Strong("strong".into()),
+                common: Default::default(),
+            }])
+        )
     }
 }

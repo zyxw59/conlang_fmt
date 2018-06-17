@@ -7,7 +7,7 @@ use errors::{ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Document {
     /// A list of blocks in the document
     blocks: Vec<Block>,
@@ -24,7 +24,7 @@ pub struct Document {
 
 pub struct Parameter(pub Option<String>, pub String);
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Block {
     pub kind: BlockType,
     pub common: BlockCommon,
@@ -49,7 +49,7 @@ impl From<Text> for Block {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct BlockCommon {
     pub class: String,
     pub id: String,
@@ -76,7 +76,7 @@ impl BlockCommon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum BlockType {
     Heading(Heading),
     Contents(Contents),
@@ -124,7 +124,7 @@ impl BlockType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Heading {
     pub title: Text,
     pub numbered: bool,
@@ -169,7 +169,7 @@ impl Default for Heading {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Contents {
     pub title: Text,
     pub max_level: usize,
@@ -201,7 +201,7 @@ impl Default for Contents {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct List {
     pub items: Vec<ListItem>,
     pub ordered: bool,
@@ -227,13 +227,13 @@ impl List {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct ListItem {
     pub text: Text,
     pub sublist: Option<List>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Table {
     pub title: Text,
     pub numbered: bool,
@@ -272,27 +272,27 @@ impl Default for Table {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Row {
     pub cells: Vec<Cell>,
     pub header: bool,
     pub class: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Column {
     pub header: bool,
     pub class: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Cell {
     rows: usize,
     cols: usize,
     text: Text,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Gloss {
     pub title: Text,
     pub numbered: bool,
@@ -333,7 +333,7 @@ impl Default for Gloss {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Text(pub Vec<Inline>);
 
 impl Text {
@@ -360,7 +360,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Inline {
     pub kind: InlineType,
     pub common: InlineCommon,
@@ -384,7 +384,7 @@ impl From<String> for Inline {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct InlineCommon {
     pub class: String,
 }
@@ -416,7 +416,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum InlineType {
     Emphasis(Text),
     Strong(Text),
@@ -464,7 +464,7 @@ impl InlineType {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Link {
     pub url: String,
     pub title: Text,
