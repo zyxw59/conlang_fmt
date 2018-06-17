@@ -389,15 +389,17 @@ impl<'a> Block<'a> {
         self.text_until(text, |_, c| c == until)
     }
 
-    /// Appends elements to the given `document::Text` object up until the next occurrance of
-    /// `\n::` not contained in another element, or until the end of the block. The iterator will
-    /// point at the first colon.
+    /// Appends elements to the given `document::Text` object up until the next occurrance of `::`
+    /// at the start of a line (ignoring whitespace), not contained in another element, or until
+    /// the end of the block. The iterator will point at the first character of the line, which is
+    /// either whitespace or the first colon.
     fn text_until_hard_line(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
         self.text_until(text, |slf, c| {
+            let idx = slf.skip_whitespace_virtual();
             // match the newline, and then...
-            c == '\n' && match slf.get(slf.idx + 1) {
+            c == '\n' && match slf.get(idx + 1) {
                 // match the first colon
-                Some(':') => match slf.get(slf.idx + 2) {
+                Some(':') => match slf.get(idx + 2) {
                     // match the second colon: we're done
                     Some(':') => true,
                     _ => false,
@@ -618,13 +620,21 @@ impl<'a> Block<'a> {
 
     /// Skips until the next non-whitespace character.
     pub fn skip_whitespace(&mut self) {
-        while let Some(c) = self.peek() {
-            if c.is_whitespace() {
-                return;
+        self.idx = self.skip_whitespace_virtual();
+    }
+
+    /// Finds the index for the next non-whitespace character, or the end of the block, without
+    /// advancing the iterator.
+    fn skip_whitespace_virtual(&self) -> usize {
+        let mut idx = self.idx + 1;
+        while let Some(c) = self.get(idx) {
+            if !c.is_whitespace() {
+                break;
             } else {
-                self.idx += 1;
+                idx += 1;
             }
         }
+        idx
     }
 }
 
