@@ -86,7 +86,7 @@ impl<'a> Block<'a> {
         // save the position of the first non-whitespace character; if we need to rewind, this is
         // where we should go.
         let start = self.idx;
-        let mut block = match self.next() {
+        Ok(Some(match self.next() {
             Some(':') => match self.directive()?.as_ref() {
                 "toc" => {
                     let mut toc = document::Contents::new();
@@ -102,8 +102,13 @@ impl<'a> Block<'a> {
                     let mut list = document::List::new();
                     let mut common = document::BlockCommon::new();
                     update_multiple!(self, list, common);
-                    while self.idx <= self.len() {
-                        self.list_tree(0, &mut list.items)?;
+                    while self.idx < self.len() {
+                        let indent = self.skip_whitespace_virtual() - self.idx;
+                        self.idx += indent + 2;
+                        let mut item = document::ListItem::new();
+                        self.text_until_hard_line(&mut item.text)?;
+                        self.list_tree(indent, &mut item.sublist)?;
+                        list.items.push(item);
                     }
                     document::Block {
                         kind: document::BlockType::List(list),
@@ -155,8 +160,7 @@ impl<'a> Block<'a> {
                 text.into()
             }
             None => return Ok(None),
-        };
-        unimplemented!()
+        }))
     }
 
     /// Recursively appends list items to the given vector
@@ -170,6 +174,7 @@ impl<'a> Block<'a> {
             if indent <= last_indent {
                 return Ok(());
             }
+            self.idx += indent + 2;
             let mut item = document::ListItem::new();
             self.text_until_hard_line(&mut item.text)?;
             self.list_tree(indent, &mut item.sublist)?;
@@ -369,13 +374,15 @@ impl<'a> Block<'a> {
         self.text_until(text, |slf, c| {
             let idx = slf.skip_whitespace_virtual();
             // match the newline, and then...
-            c == '\n' && match slf.get(idx + 1) {
+            c == '\n' && match slf.get(idx) {
                 // match the first colon
-                Some(':') => match slf.get(idx + 2) {
+                Some(':') => match slf.get(idx + 1) {
                     // match the second colon: we're done
                     Some(':') => true,
                     _ => false,
                 },
+                // end of block after newline and whitespace; this is the end of a hard line
+                None => true,
                 _ => false,
             }
         })
@@ -571,7 +578,7 @@ impl<'a> Block<'a> {
     /// Finds the index for the next non-whitespace character, or the end of the block, without
     /// advancing the iterator.
     fn skip_whitespace_virtual(&self) -> usize {
-        let mut idx = self.idx + 1;
+        let mut idx = self.idx;
         while let Some(c) = self.get(idx) {
             if !c.is_whitespace() {
                 break;
@@ -656,5 +663,47 @@ mod tests {
                 common: Default::default(),
             }])
         )
+    }
+
+    #[test]
+    fn list() {
+        let input_str = ":list:\n::1\n::2\n ::2a\n ::2b\n::3".as_bytes();
+        let mut input = Input::new(BufReader::new(input_str));
+        let block = input.next_block().unwrap().parse().unwrap().unwrap();
+        if let document::BlockType::List(list) = block.kind {
+            assert!(!list.ordered);
+            assert_eq!(
+                list.items[0],
+                document::ListItem {
+                    text: "1".into(),
+                    sublist: vec![],
+                }
+            );
+            assert_eq!(
+                list.items[1],
+                document::ListItem {
+                    text: "2".into(),
+                    sublist: vec![
+                        document::ListItem {
+                            text: "2a".into(),
+                            sublist: vec![],
+                        },
+                        document::ListItem {
+                            text: "2b".into(),
+                            sublist: vec![],
+                        },
+                    ],
+                }
+            );
+            assert_eq!(
+                list.items[2],
+                document::ListItem {
+                    text: "3".into(),
+                    sublist: vec![],
+                }
+            );
+        } else {
+            unreachable!();
+        }
     }
 }
