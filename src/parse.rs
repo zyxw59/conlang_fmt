@@ -119,7 +119,68 @@ impl<'a> Block<'a> {
                     let mut table = document::Table::new();
                     let mut common = document::BlockCommon::new();
                     update_multiple!(self, table, common);
-                    unimplemented!();
+                    self.text_until_char(&mut table.title, '\n')?;
+                    // match column parameters
+                    while let Some(c) = self.next() {
+                        match c {
+                            // new cell
+                            '|' => {
+                                let mut col = document::Column::new();
+                                update_multiple!(self, col);
+                                table.columns.push(col);
+                            }
+                            // end of column parameter row
+                            c if self.match_hard_line(c) => break,
+                            // skip
+                            c if c.is_whitespace() => {}
+                            // error
+                            c => {
+                                return Err(ErrorKind::Expected('|', c)
+                                    .context(ErrorKind::Block(self.start.unwrap()))
+                                    .into())
+                            }
+                        }
+                    }
+                    // now we've matched a hard line; time to start constructing the rows of the
+                    // table
+                    while let Some(_) = self.peek() {
+                        self.skip_whitespace();
+                        // skip until after the double colon
+                        self.idx += 2;
+                        let mut row = document::Row::new();
+                        update_multiple!(self, row);
+                        // match the cells
+                        while let Some(c) = self.next() {
+                            match c {
+                                // new cell
+                                '|' => {
+                                    let mut cell = document::Cell::new();
+                                    update_multiple!(self, cell);
+                                    self.text_until(&mut cell.text, |slf, c| {
+                                        c == '|' || slf.match_hard_line(c)
+                                    })?;
+                                    row.cells.push(cell);
+                                    match self.peek() {
+                                        Some('|') => {}
+                                        _ => break,
+                                    }
+                                }
+                                '\n' if self.match_hard_line('\n') => break,
+                                c if c.is_whitespace() => {}
+                                c => {
+                                    return Err(ErrorKind::Expected('|', c)
+                                        .context(ErrorKind::Block(self.start.unwrap()))
+                                        .into())
+                                }
+                            }
+                        }
+                        // now push the row and loop
+                        table.rows.push(row);
+                    }
+                    document::Block {
+                        kind: document::BlockType::Table(table),
+                        common,
+                    }
                 }
                 "gloss" => {
                     let mut gloss = document::Gloss::new();

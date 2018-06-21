@@ -285,17 +285,88 @@ pub struct Row {
     pub class: String,
 }
 
+impl Row {
+    pub fn new() -> Row {
+        Default::default()
+    }
+
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("class") => {
+                self.class = param.1;
+                None
+            }
+            None => {
+                match param.1.as_ref() {
+                    "header" => self.header = true,
+                    _ => self.class = param.1,
+                }
+                None
+            }
+            Some(_) => Some(param),
+        })
+    }
+}
+
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct Column {
     pub header: bool,
     pub class: String,
 }
 
+impl Column {
+    pub fn new() -> Column {
+        Default::default()
+    }
+
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("class") => {
+                self.class = param.1;
+                None
+            }
+            None => {
+                match param.1.as_ref() {
+                    "header" => self.header = true,
+                    _ => self.class = param.1,
+                }
+                None
+            }
+            Some(_) => Some(param),
+        })
+    }
+}
+
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct Cell {
-    rows: usize,
-    cols: usize,
-    text: Text,
+    pub rows: usize,
+    pub cols: usize,
+    pub class: String,
+    pub text: Text,
+}
+
+impl Cell {
+    pub fn new() -> Cell {
+        Default::default()
+    }
+
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("class") | None => {
+                self.class = param.1;
+                None
+            }
+            Some("rows") => {
+                self.rows = param.1.parse::<usize>().with_context(|_| ErrorKind::Parse)?;
+                None
+            }
+            Some("cols") => {
+                self.cols = param.1.parse::<usize>().with_context(|_| ErrorKind::Parse)?;
+                None
+            }
+            Some(_) => Some(param),
+        })
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
