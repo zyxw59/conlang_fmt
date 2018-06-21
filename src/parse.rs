@@ -371,21 +371,24 @@ impl<'a> Block<'a> {
     /// the end of the block. The iterator will point at the first character of the line, which is
     /// either whitespace or the first colon.
     fn text_until_hard_line(&mut self, text: &mut document::Text) -> EResult<()> {
-        self.text_until(text, |slf, c| {
-            let idx = slf.skip_whitespace_virtual();
-            // match the newline, and then...
-            c == '\n' && match slf.get(idx) {
-                // match the first colon
-                Some(':') => match slf.get(idx + 1) {
-                    // match the second colon: we're done
-                    Some(':') => true,
-                    _ => false,
-                },
-                // end of block after newline and whitespace; this is the end of a hard line
-                None => true,
+        self.text_until(text, Self::match_hard_line)
+    }
+
+    /// Matches a line starting with `::`.
+    fn match_hard_line(&self, c: char) -> bool {
+        let idx = self.skip_whitespace_virtual();
+        // match the newline, and then...
+        c == '\n' && match self.get(idx) {
+            // match the first colon
+            Some(':') => match self.get(idx + 1) {
+                // match the second colon: we're done
+                Some(':') => true,
                 _ => false,
-            }
-        })
+            },
+            // end of block after newline and whitespace; this is the end of a hard line
+            None => true,
+            _ => false,
+        }
     }
 
     /// Appends elements to the given `document::Text` object up until the character matching the
