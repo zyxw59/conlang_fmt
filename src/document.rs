@@ -24,15 +24,19 @@ pub struct Document {
 
 pub struct Parameter(pub Option<String>, pub String);
 
+pub trait UpdateParam {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter>;
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct Block {
     pub kind: BlockType,
     pub common: BlockCommon,
 }
 
-impl Block {
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for Block {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         self.kind.update_param(param).and_then(|p| match p {
             Some(p) => self.common.update_param(p),
             None => Ok(None),
@@ -59,9 +63,10 @@ impl BlockCommon {
     pub fn new() -> BlockCommon {
         Default::default()
     }
+}
 
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for BlockCommon {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("class") | None => {
                 self.class = param.1;
@@ -110,9 +115,10 @@ impl BlockType {
     pub fn paragraph() -> BlockType {
         BlockType::Paragraph(Default::default())
     }
+}
 
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for BlockType {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         match *self {
             BlockType::Heading(ref mut heading) => heading.update_param(param),
             BlockType::Contents(ref mut contents) => contents.update_param(param),
@@ -137,9 +143,10 @@ impl Heading {
     pub fn new() -> Heading {
         Default::default()
     }
+}
 
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for Heading {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {
@@ -179,9 +186,10 @@ impl Contents {
     pub fn new() -> Contents {
         Default::default()
     }
+}
 
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for Contents {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("max_level") => {
                 self.max_level = param.1.parse::<usize>().with_context(|_| ErrorKind::Parse)?;
@@ -211,9 +219,10 @@ impl List {
     pub fn new() -> List {
         Default::default()
     }
+}
 
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for List {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {
@@ -251,9 +260,10 @@ impl Table {
     pub fn new() -> Table {
         Default::default()
     }
+}
 
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for Table {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {
@@ -289,8 +299,10 @@ impl Row {
     pub fn new() -> Row {
         Default::default()
     }
+}
 
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for Row {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("class") => {
                 self.class = param.1;
@@ -318,8 +330,10 @@ impl Column {
     pub fn new() -> Column {
         Default::default()
     }
+}
 
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for Column {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("class") => {
                 self.class = param.1;
@@ -349,8 +363,10 @@ impl Cell {
     pub fn new() -> Cell {
         Default::default()
     }
+}
 
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for Cell {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("class") | None => {
                 self.class = param.1;
@@ -382,9 +398,10 @@ impl Gloss {
     pub fn new() -> Gloss {
         Default::default()
     }
+}
 
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for Gloss {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {
@@ -416,9 +433,8 @@ pub struct GlossLine {
     pub class: String,
 }
 
-impl GlossLine {
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for GlossLine {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("class") | None => {
                 self.class = param.1;
@@ -489,8 +505,10 @@ impl InlineCommon {
     pub fn new() -> InlineCommon {
         Default::default()
     }
+}
 
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for InlineCommon {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("class") | None => {
                 self.class = param.1;
@@ -534,8 +552,10 @@ impl InlineType {
     pub fn reference() -> InlineType {
         InlineType::Reference(Default::default())
     }
+}
 
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for InlineType {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match *self {
             InlineType::Reference(ref mut s) => match param.0.as_ref().map(|p| p.as_ref()) {
                 Some("ref") | None => {

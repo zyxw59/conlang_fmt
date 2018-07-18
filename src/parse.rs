@@ -3,7 +3,7 @@ use std::ops::Deref;
 use failure::Fail;
 use itertools::Itertools;
 
-use document::{self, Parameter};
+use document::{self, Parameter, UpdateParam};
 use errors::{EndOfBlockKind, ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
