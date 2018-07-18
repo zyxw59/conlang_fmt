@@ -688,6 +688,13 @@ impl<'a> Block<'a> {
         self.idx
     }
 
+    /// Returns the next character in the block, advancing the iterator.
+    fn next(&mut self) -> Option<char> {
+        let c = self.slice.get(self.idx).cloned();
+        self.idx += 1;
+        c
+    }
+
     /// Peeks at the next character in the block, without advancing the iterator.
     pub fn peek(&self) -> Option<char> {
         self.slice.get(self.idx).cloned()
@@ -710,20 +717,6 @@ impl<'a> Block<'a> {
             }
         }
         idx
-    }
-}
-
-impl<'a> Iterator for Block<'a> {
-    type Item = char;
-
-    fn next(&mut self) -> Option<char> {
-        let c = self.slice.get(self.idx).cloned();
-        self.idx += 1;
-        c
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.len(), Some(self.len()))
     }
 }
 
