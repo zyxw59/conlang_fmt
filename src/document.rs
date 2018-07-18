@@ -449,6 +449,10 @@ impl GlossLine {
     pub fn new() -> GlossLine {
         Default::default()
     }
+
+    pub fn push(&mut self, word: Text) {
+        self.words.push(word);
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

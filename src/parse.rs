@@ -214,10 +214,37 @@ impl<'a> Block<'a> {
                                     gloss.postamble.push(line);
                                 }
                             }
-                            document::GlossLineType::Split => unimplemented!(),
+                            document::GlossLineType::Split => {
+                                // check if we've already entered the postamble; a gloss line here
+                                // is an error
+                                if gloss.postamble.len() != 0 {
+                                    // i'll replace this with a real error later
+                                    panic!("Gloss line after postamble");
+                                }
+                                let mut line = document::GlossLine::new();
+                                line.class = class;
+                                while let Some(c) = self.next() {
+                                    match c {
+                                        // break if we're at a hard line break
+                                        '\n' if self.match_hard_line('\n') => break,
+                                        // otherwise, skip whitespace
+                                        c if c.is_whitespace() => {}
+                                        // non-whitespace; start a new word
+                                        c => {
+                                            let mut word = Default::default();
+                                            self.text_until(&mut word, |_, c| c.is_whitespace())?;
+                                            line.push(word);
+                                        }
+                                    }
+                                }
+                                gloss.gloss.push(line);
+                            }
                         }
                     }
-                    unimplemented!();
+                    document::Block {
+                        kind: document::BlockType::Gloss(gloss),
+                        common,
+                    }
                 }
                 _ => {
                     // this directive is an inline directive; rewind and parse the block as a
