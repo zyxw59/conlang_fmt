@@ -33,7 +33,7 @@ impl UpdateParam for String {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("class") | None => {
-                self.class = param.1;
+                *self = param.1;
                 None
             }
             _ => Some(param),
@@ -445,15 +445,36 @@ pub struct GlossLine {
     pub class: String,
 }
 
-impl UpdateParam for GlossLine {
-    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
-        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
-            Some("class") | None => {
-                self.class = param.1;
-                None
-            }
-            _ => Some(param),
+impl GlossLine {
+    pub fn new() -> GlossLine {
+        Default::default()
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum GlossLineType {
+    NoSplit,
+    Split,
+}
+
+impl GlossLineType {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref() {
+            Some(_) => Some(param),
+            None => match param.1.as_ref() {
+                "nosplit" => {
+                    *self = GlossLineType::NoSplit;
+                    None
+                }
+                _ => Some(param),
+            },
         })
+    }
+}
+impl Default for GlossLineType {
+    fn default() -> GlossLineType {
+        GlossLineType::Split
     }
 }
 
@@ -470,6 +491,15 @@ impl Text {
         T: Into<Inline>,
     {
         self.0.push(element.into());
+    }
+
+    pub fn with_class(self, class: impl Into<String>) -> Text {
+        Text(vec![Inline {
+            kind: InlineType::Span(self),
+            common: InlineCommon {
+                class: class.into(),
+            },
+        }])
     }
 }
 

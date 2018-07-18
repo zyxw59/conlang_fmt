@@ -186,6 +186,37 @@ impl<'a> Block<'a> {
                     let mut gloss = document::Gloss::new();
                     let mut common = document::BlockCommon::new();
                     update_multiple!(self, gloss, common);
+                    self.text_until_hard_line(&mut gloss.title)?;
+                    // now we've matched a hard line; time to start constructing the lines of the
+                    // gloss
+                    while let Some(_) = self.peek() {
+                        self.skip_whitespace();
+                        // skip until after the double colon
+                        self.idx += 2;
+                        let mut class = String::new();
+                        let mut kind = document::GlossLineType::Split;
+                        update_multiple!(self, kind, class);
+                        // check whether it's a nosplit:
+                        match kind {
+                            document::GlossLineType::NoSplit => {
+                                let mut line = Default::default();
+                                // add the rest of the line
+                                self.text_until_hard_line(&mut line)?;
+                                // add class if there was one in the parameters
+                                if class.len() != 0 {
+                                    line = line.with_class(class);
+                                }
+                                // if we've matched split lines, this must be in the postamble,
+                                // otherwise it's the preamble
+                                if gloss.gloss.len() == 0 {
+                                    gloss.preamble.push(line);
+                                } else {
+                                    gloss.postamble.push(line);
+                                }
+                            }
+                            document::GlossLineType::Split => unimplemented!(),
+                        }
+                    }
                     unimplemented!();
                 }
                 _ => {
