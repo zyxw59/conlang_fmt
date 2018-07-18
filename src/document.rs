@@ -490,10 +490,7 @@ impl Text {
         Default::default()
     }
 
-    pub fn push<T>(&mut self, element: T)
-    where
-        T: Into<Inline>,
-    {
+    pub fn push(&mut self, element: impl Into<Inline>) {
         self.0.push(element.into());
     }
 
