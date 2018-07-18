@@ -374,7 +374,7 @@ pub struct Gloss {
     pub title: Text,
     pub numbered: bool,
     pub preamble: Vec<Text>,
-    pub gloss: Vec<Vec<Text>>,
+    pub gloss: Vec<GlossLine>,
     pub postamble: Vec<Text>,
 }
 
@@ -407,6 +407,25 @@ impl Default for Gloss {
             gloss: Default::default(),
             postamble: Default::default(),
         }
+    }
+}
+
+#[derive(Debug, Default, Eq, PartialEq)]
+pub struct GlossLine {
+    pub words: Vec<Text>,
+    pub class: String,
+}
+
+impl GlossLine {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("class") | None => {
+                self.class = param.1;
+                None
+            }
+            _ => Some(param),
+        })
     }
 }
 
