@@ -218,8 +218,9 @@ impl<'a> Block<'a> {
                                 // check if we've already entered the postamble; a gloss line here
                                 // is an error
                                 if gloss.postamble.len() != 0 {
-                                    // i'll replace this with a real error later
-                                    panic!("Gloss line after postamble");
+                                    return Err(ErrorKind::GlossLine
+                                        .context(ErrorKind::Block(self.start.unwrap()))
+                                        .into());
                                 }
                                 let mut line = document::GlossLine::new();
                                 line.class = class;

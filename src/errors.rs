@@ -55,6 +55,8 @@ pub enum ErrorKind {
     EndOfBlock(EndOfBlockKind),
     #[fail(display = "Expected `{}`, got `{}`", _0, _1)]
     Expected(char, char),
+    #[fail(display = "Gloss line after postamble")]
+    GlossLine,
     #[fail(display = "Parsing error")]
     Parse,
     #[fail(display = "Unknown parameter {}", _0)]
