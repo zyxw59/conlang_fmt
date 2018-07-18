@@ -29,6 +29,18 @@ pub trait UpdateParam {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter>;
 }
 
+impl UpdateParam for String {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(match param.0.as_ref().map(|n| n.as_ref()) {
+            Some("class") | None => {
+                self.class = param.1;
+                None
+            }
+            _ => Some(param),
+        })
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct Block {
     pub kind: BlockType,
