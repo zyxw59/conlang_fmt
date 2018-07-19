@@ -8,8 +8,8 @@ mod errors;
 mod input;
 mod parse;
 
-use std::io;
 use failure::Fail;
+use std::io;
 
 fn main() {
     // for now, just read from stdin
