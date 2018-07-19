@@ -120,6 +120,8 @@ impl<'a> Block<'a> {
                     let mut common = document::BlockCommon::new();
                     update_multiple!(self, table, common);
                     self.text_until_char(&mut table.title, '\n')?;
+                    // put the newline back on the stack, since it's needed for `match_hard_line`
+                    self.idx -= 1;
                     // match column parameters
                     while let Some(c) = self.next() {
                         match c {
@@ -159,6 +161,8 @@ impl<'a> Block<'a> {
                                     self.text_until(&mut cell.text, |slf, c| {
                                         c == '|' || slf.match_hard_line(c)
                                     })?;
+                                    // rewind to put the pipe or newline back
+                                    self.idx -= 1;
                                     row.cells.push(cell);
                                     match self.peek() {
                                         Some('|') => {}
@@ -175,7 +179,9 @@ impl<'a> Block<'a> {
                             }
                         }
                         // now push the row and loop
-                        table.rows.push(row);
+                        if row.cells.len() > 0 {
+                            table.rows.push(row);
+                        }
                     }
                     document::Block {
                         kind: document::BlockType::Table(table),
