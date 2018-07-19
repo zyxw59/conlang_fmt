@@ -22,6 +22,42 @@ pub struct Document {
     ids: HashMap<String, usize>,
 }
 
+impl Document {
+    /// Adds the given block to the document.
+    pub fn add_block(&mut self, block: Block) {
+        let idx = self.blocks.len();
+        match block.kind {
+            BlockType::Heading(Heading { level, .. }) => {
+                if level == 1 || self.sections.len() == 0 {
+                    self.sections.push(idx);
+                } else {
+                    // get index into `blocks` of last section
+                    let mut curr = *self.sections.last().unwrap();
+                    loop {
+                        match self.blocks[curr].kind {
+                            BlockType::Heading(ref mut h) => {
+                                if h.level == level - 1 {
+                                    // add this section to its parent and break
+                                    h.children.push(idx);
+                                    break;
+                                } else {
+                                    // get index into `blocks` of last subsection
+                                    curr = *h.children.last().unwrap();
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+            BlockType::Table(_) => self.tables.push(idx),
+            BlockType::Gloss(_) => self.glosses.push(idx),
+            _ => {}
+        }
+        unimplemented!();
+    }
+}
+
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct Parameter(pub Option<String>, pub String);
 
