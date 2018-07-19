@@ -231,8 +231,11 @@ impl<'a> Block<'a> {
                                         // otherwise, skip whitespace
                                         c if c.is_whitespace() => {}
                                         // non-whitespace; start a new word
-                                        c => {
+                                        _ => {
                                             let mut word = Default::default();
+                                            // rewind, since we want to include the character we
+                                            // matched
+                                            self.idx -= 1;
                                             self.text_until(&mut word, |_, c| c.is_whitespace())?;
                                             line.push(word);
                                         }
