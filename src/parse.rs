@@ -801,7 +801,9 @@ mod tests {
         block.idx += 1;
         let param = block.parameters().unwrap();
         assert_eq!(param, Vec::new());
-        assert_eq!(block.peek(), Some('\n'));
+        let newline = block.next().unwrap();
+        assert_eq!(newline, '\n');
+        assert!(block.match_hard_line(newline));
     }
 
     #[test]
