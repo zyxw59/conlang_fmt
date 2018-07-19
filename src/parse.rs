@@ -554,8 +554,8 @@ impl<'a> Block<'a> {
                     push_and_renew!(buffer: String::new(), text);
                     text.push(self.formatting_inline(
                         '*',
-                        document::InlineType::Emphasis,
-                        document::InlineType::Strong,
+                        document::InlineType::Italics,
+                        document::InlineType::Bold,
                     )?);
                 }
                 // small caps
