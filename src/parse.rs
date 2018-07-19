@@ -805,6 +805,17 @@ mod tests {
     }
 
     #[test]
+    fn directive() {
+        let input_str = ":foo:x".as_bytes();
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        block.next();
+        let dir = block.directive().unwrap();
+        assert_eq!(dir, "foo");
+        assert_eq!(block.next(), Some('x'));
+    }
+
+    #[test]
     fn text_emphasis() {
         let input_str = r#"*emphasis*"#.as_bytes();
         let mut input = Input::new(BufReader::new(input_str));
