@@ -319,8 +319,12 @@ impl<'a> Block<'a> {
         }
     }
 
-    /// Returns a list of parameters. If a parameter list isn't present, returns an empty list.
+    /// Returns a list of parameters. If a parameter list isn't present, returns an empty list and
+    /// doesn't advance the iterator.
     fn parameters(&mut self) -> EResult<Vec<Parameter>> {
+        // save the current position, so that if we fail to find a parameter list, we don't advance
+        // the iterator.
+        let idx = self.idx;
         self.skip_whitespace();
         let mut params = Vec::new();
         match self.peek() {
@@ -344,8 +348,11 @@ impl<'a> Block<'a> {
                     }
                 }
             }
-            // no parameter list, return an empty list
-            _ => Ok(params),
+            // no parameter list, return an empty list and rewind the iterator
+            _ => {
+                self.idx = idx;
+                Ok(params)
+            }
         }
     }
 
@@ -734,7 +741,6 @@ mod tests {
     #[test]
     fn block_iter() {
         let input_str = r#"block 1, line 1"#.as_bytes();
-
         let mut input = Input::new(BufReader::new(input_str));
         let mut block = input.next_block().unwrap();
         assert_eq!(block.start(), Some(0));
@@ -789,45 +795,50 @@ mod tests {
 
     #[test]
     fn parameters_none() {
-        let input_str = r#"\n::"#.as_bytes();
+        let input_str = "0\n::".as_bytes();
         let mut input = Input::new(BufReader::new(input_str));
         let mut block = input.next_block().unwrap();
+        block.idx += 1;
         let param = block.parameters().unwrap();
         assert_eq!(param, Vec::new());
-        assert_eq!(block.next(), Some('\n'));
+        assert_eq!(block.peek(), Some('\n'));
     }
 
     #[test]
     fn text_emphasis() {
         let input_str = r#"*emphasis*"#.as_bytes();
-
         let mut input = Input::new(BufReader::new(input_str));
         let mut block = input.next_block().unwrap();
         let mut text = document::Text::new();
         assert!(block.text_rest(&mut text).is_ok());
         assert_eq!(
             text,
-            document::Text(vec![document::Inline {
-                kind: document::InlineType::Emphasis("emphasis".into()),
-                common: Default::default(),
-            }])
+            document::Text(vec![
+                document::Inline {
+                    kind: document::InlineType::Emphasis("emphasis".into()),
+                    common: Default::default(),
+                },
+                document::Inline::from(String::from(" ")),
+            ])
         )
     }
 
     #[test]
     fn text_strong() {
         let input_str = r#"**strong**"#.as_bytes();
-
         let mut input = Input::new(BufReader::new(input_str));
         let mut block = input.next_block().unwrap();
         let mut text = document::Text::new();
         assert!(block.text_rest(&mut text).is_ok());
         assert_eq!(
             text,
-            document::Text(vec![document::Inline {
-                kind: document::InlineType::Strong("strong".into()),
-                common: Default::default(),
-            }])
+            document::Text(vec![
+                document::Inline {
+                    kind: document::InlineType::Strong("strong".into()),
+                    common: Default::default(),
+                },
+                document::Inline::from(String::from(" ")),
+            ])
         )
     }
 
