@@ -743,6 +743,61 @@ mod tests {
     }
 
     #[test]
+    fn parameters_nameless() {
+        let input_str = r#"[nameless]"#.as_bytes();
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        let param = block.parameters().unwrap();
+        assert_eq!(param, vec![Parameter(None, String::from("nameless"))]);
+    }
+
+    #[test]
+    fn parameters_named() {
+        let input_str = r#"[class=foo]"#.as_bytes();
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        let param = block.parameters().unwrap();
+        assert_eq!(
+            param,
+            vec![Parameter(Some(String::from("class")), String::from("foo"))]
+        );
+    }
+
+    #[test]
+    fn parameters_space() {
+        let input_str = r#"[ nameless ]"#.as_bytes();
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        let param = block.parameters().unwrap();
+        assert_eq!(param, vec![Parameter(None, String::from("nameless"))]);
+    }
+
+    #[test]
+    fn parameters_multiple() {
+        let input_str = r#"[id=foo, class=bar]"#.as_bytes();
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        let param = block.parameters().unwrap();
+        assert_eq!(
+            param,
+            vec![
+                Parameter(Some(String::from("id")), String::from("foo")),
+                Parameter(Some(String::from("class")), String::from("bar")),
+            ]
+        );
+    }
+
+    #[test]
+    fn parameters_none() {
+        let input_str = r#"\n::"#.as_bytes();
+        let mut input = Input::new(BufReader::new(input_str));
+        let mut block = input.next_block().unwrap();
+        let param = block.parameters().unwrap();
+        assert_eq!(param, Vec::new());
+        assert_eq!(block.next(), Some('\n'));
+    }
+
+    #[test]
     fn text_emphasis() {
         let input_str = r#"*emphasis*"#.as_bytes();
 

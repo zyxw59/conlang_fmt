@@ -22,6 +22,7 @@ pub struct Document {
     ids: HashMap<String, usize>,
 }
 
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Parameter(pub Option<String>, pub String);
 
 pub trait UpdateParam {
