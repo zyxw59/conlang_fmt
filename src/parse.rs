@@ -673,19 +673,9 @@ impl<'a> Block<'a> {
             .into())
     }
 
-    /// Returns the length of the block, in number of characters.
-    pub fn len(&self) -> usize {
-        self.slice.len()
-    }
-
     /// Returns the starting line number of the block, which is only defined for non-empty blocks.
     pub fn start(&self) -> Option<usize> {
         self.start
-    }
-
-    /// Returns the current index of the iterator.
-    pub fn index(&self) -> usize {
-        self.idx
     }
 
     /// Returns the next character in the block, advancing the iterator.
@@ -696,12 +686,12 @@ impl<'a> Block<'a> {
     }
 
     /// Peeks at the next character in the block, without advancing the iterator.
-    pub fn peek(&self) -> Option<char> {
+    fn peek(&self) -> Option<char> {
         self.slice.get(self.idx).cloned()
     }
 
     /// Skips until the next non-whitespace character.
-    pub fn skip_whitespace(&mut self) {
+    fn skip_whitespace(&mut self) {
         self.idx = self.skip_whitespace_virtual();
     }
 
