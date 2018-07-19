@@ -237,6 +237,8 @@ impl<'a> Block<'a> {
                                             // matched
                                             self.idx -= 1;
                                             self.text_until(&mut word, |_, c| c.is_whitespace())?;
+                                            // rewind, since `text_until` consumes the whitespace
+                                            self.idx -= 1;
                                             line.push(word);
                                         }
                                     }
