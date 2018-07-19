@@ -103,32 +103,6 @@ pub enum BlockType {
     Paragraph(Text),
 }
 
-impl BlockType {
-    pub fn heading() -> BlockType {
-        BlockType::Heading(Default::default())
-    }
-
-    pub fn contents() -> BlockType {
-        BlockType::Contents(Default::default())
-    }
-
-    pub fn list() -> BlockType {
-        BlockType::List(Default::default())
-    }
-
-    pub fn table() -> BlockType {
-        BlockType::Table(Default::default())
-    }
-
-    pub fn gloss() -> BlockType {
-        BlockType::Gloss(Default::default())
-    }
-
-    pub fn paragraph() -> BlockType {
-        BlockType::Paragraph(Default::default())
-    }
-}
-
 impl UpdateParam for BlockType {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         match *self {
