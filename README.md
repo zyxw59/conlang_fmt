@@ -30,14 +30,9 @@ the value of the argument.
   having the `notoc` parameter, rather than a class of `notoc`.
 - `id`: The ID for the element.
   This parameter is only allowed on block-level directives.
-  By default, the ID is composed of three elements, joined by `-`:
-  - The type of the block (e.g. `section`, `table`, `gloss`)
-  - The title of the block, if it has one, with spaces replaced by `-`.
-    Otherwise, if the block is numbered, the number of the block.
-    If the block lacks both a title and a number, then simply `nonumber`.
-  - A numeric suffix to ensure uniqueness.
-    If the ID is already unique, this element will be ommitted, including the
-    preceding `-`.
+  If an ID is specified for an element, it must be unique.
+  To reference a block with the `:ref:` directive, it must have an ID
+  specified.
 
 ### Directives
 
