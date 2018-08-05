@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::default::Default;
 
@@ -24,7 +25,7 @@ pub struct Document {
 
 impl Document {
     /// Adds the given block to the document.
-    pub fn add_block(&mut self, block: Block) {
+    pub fn add_block(&mut self, block: Block) -> EResult<()> {
         let idx = self.blocks.len();
         match block.kind {
             BlockType::Heading(Heading { level, .. }) => {
@@ -45,6 +46,8 @@ impl Document {
                                     curr = *h.children.last().unwrap();
                                 }
                             }
+                            // All blocks in the heading tree should be headings; there's no other
+                            // chance for them to get added
                             _ => unreachable!(),
                         }
                     }
@@ -54,7 +57,18 @@ impl Document {
             BlockType::Gloss(_) => self.glosses.push(idx),
             _ => {}
         }
-        unimplemented!();
+        let id = block.common.id.clone();
+        if !id.is_empty() {
+            match self.ids.entry(id) {
+                Entry::Occupied(e) => Err(ErrorKind::Id(e.key().clone()).into()),
+                Entry::Vacant(e) => {
+                    e.insert(idx);
+                    Ok(())
+                }
+            }
+        } else {
+            Ok(())
+        }
     }
 }
 

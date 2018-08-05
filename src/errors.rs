@@ -61,6 +61,8 @@ pub enum ErrorKind {
     Parse,
     #[fail(display = "Unknown parameter {}", _0)]
     Parameter(String),
+    #[fail(display = "Duplicate ID {}", _0)]
+    Id(String),
     #[fail(display = "Invalid UTF-8 in line {}", _0)]
     Unicode(usize),
     #[fail(display = "An IO error occurred while reading line {}", _0)]
