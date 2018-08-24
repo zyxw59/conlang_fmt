@@ -1,11 +1,13 @@
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
+extern crate htmlescape;
 extern crate itertools;
 
 mod document;
 mod errors;
 mod input;
+mod output;
 mod parse;
 
 use std::io;
