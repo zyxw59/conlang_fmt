@@ -5,6 +5,17 @@ use htmlescape;
 
 use errors::{ErrorKind, Result as EResult};
 
+/// Unwraps the value contained in the enum variant specified, or panics if a different enum
+/// variant is found.
+macro_rules! unwrap_enum {
+    ( $x:expr, $variant:path ) => {
+        match $x {
+            $variant(ref x) => x,
+            _ => panic!("called `unwrap_enum!()` with a mismatching enum variant"),
+        }
+    }
+}
+
 trait OutputResult<T, E> {
     fn context(self) -> Result<T, Context<ErrorKind>>;
 }
@@ -40,12 +51,13 @@ fn write_section_number(w: &mut impl Write, number: &[usize]) -> Result<(), io::
 
 struct Document {
     blocks: Vec<Block>,
+    sections: Vec<usize>,
 }
 
 impl Document {
     fn output(&self, w: &mut BufWriter<impl Write>) -> EResult<()> {
         for block in self.blocks.iter() {
-            block.output(w)?;
+            block.output(w, &self)?;
         }
         Ok(())
     }
@@ -53,12 +65,14 @@ impl Document {
 
 enum Block {
     Heading(Heading),
+    Contents(Contents),
 }
 
 impl Block {
-    fn output(&self, w: &mut BufWriter<impl Write>) -> EResult<()> {
+    fn output(&self, w: &mut BufWriter<impl Write>, document: &Document) -> EResult<()> {
         match self {
-            Block::Heading(b) => b.output(w),
+            Block::Heading(b) => b.output(w, document),
+            Block::Contents(b) => b.output(w, document),
         }
     }
 }
@@ -70,10 +84,11 @@ struct Heading {
     numbered: bool,
     number: Vec<usize>,
     title: Text,
+    children: Vec<usize>,
 }
 
 impl Heading {
-    fn output(&self, w: &mut BufWriter<impl Write>) -> EResult<()> {
+    fn output(&self, w: &mut BufWriter<impl Write>, document: &Document) -> EResult<()> {
         // print start tag
         write!(w, "<{} ", self.tag()).context()?;
         // print id, which should be set by now
@@ -91,7 +106,7 @@ impl Heading {
             write_section_number(w, &self.number).context()?;
         }
         // print title
-        self.title.output(w)?;
+        self.title.output(w, document)?;
         // close up
         write!(w, "</ {}>", self.tag()).context()?;
         Ok(())
@@ -110,10 +125,50 @@ impl Heading {
     }
 }
 
+struct Contents {}
+
+impl Contents {
+    fn output(&self, w: &mut BufWriter<impl Write>, document: &Document) -> EResult<()> {
+        unimplemented!();
+    }
+
+    fn output_sublist(
+        &self,
+        w: &mut BufWriter<impl Write>,
+        list: &[usize],
+        document: &Document,
+    ) -> EResult<()> {
+        // only do something if the list is nonempty
+        if !list.is_empty() {
+            // print start tag
+            write!(w, "<ol>").context()?;
+            // flag for when we need to set list item number manually
+            let mut manual_number = false;
+            // loop over elements
+            for &e in list {
+                let heading = unwrap_enum!(document.blocks[e], Block::Heading);
+                if !heading.numbered {
+                    write!(w, r#"<li class="nonumber">"#).context()?;
+                    manual_number = true;
+                } else if manual_number {
+                    write!(w, r#"<li value="{}">"#, heading.number.last().unwrap()).context()?;
+                    manual_number = false;
+                } else {
+                    write!(w, "<li>").context()?;
+                }
+                heading.title.output(w, document)?;
+                self.output_sublist(w, &heading.children, document)?;
+                writeln!(w, "</li>").context()?;
+            }
+        }
+        Ok(())
+    }
+}
+
 struct Text;
 
 impl Text {
-    fn output(&self, w: &mut BufWriter<impl Write>) -> EResult<()> {
+    fn output(&self, w: &mut BufWriter<impl Write>, document: &Document) -> EResult<()> {
         unimplemented!();
     }
 }
