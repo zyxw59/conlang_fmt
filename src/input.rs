@@ -3,8 +3,8 @@ use std::iter::Enumerate;
 
 use failure::ResultExt;
 
-use errors::{ErrorKind, Result as EResult};
-use parse::Block;
+use crate::errors::{ErrorKind, Result as EResult};
+use crate::parse::Block;
 
 #[derive(Debug)]
 pub struct Input<B> {
@@ -70,7 +70,8 @@ mod tests {
 
         block 2, line 1
         block 2, line 2
-        "#.as_bytes();
+        "#
+        .as_bytes();
 
         let mut input = Input::new(BufReader::new(input_str));
 
@@ -99,7 +100,8 @@ mod tests {
         block 2, line 1
         block 2, line 2
 
-        "#.as_bytes();
+        "#
+        .as_bytes();
 
         let mut input = Input::new(BufReader::new(input_str));
 
@@ -122,7 +124,8 @@ mod tests {
     fn no_final_newline() {
         let input_str = r#"block 1, line 1
         block 1, line 2
-        block 1, line 3"#.as_bytes();
+        block 1, line 3"#
+            .as_bytes();
 
         let mut input = Input::new(BufReader::new(input_str));
 

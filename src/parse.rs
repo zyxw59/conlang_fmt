@@ -3,8 +3,8 @@ use std::ops::Deref;
 use failure::Fail;
 use itertools::Itertools;
 
-use document::{self, Parameter, UpdateParam};
-use errors::{EndOfBlockKind, ErrorKind, Result as EResult};
+use crate::document::{self, Parameter, UpdateParam};
+use crate::errors::{EndOfBlockKind, ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
 
@@ -139,7 +139,7 @@ impl<'a> Block<'a> {
                             c => {
                                 return Err(ErrorKind::Expected('|', c)
                                     .context(ErrorKind::Block(self.start.unwrap()))
-                                    .into())
+                                    .into());
                             }
                         }
                     }
@@ -174,7 +174,7 @@ impl<'a> Block<'a> {
                                 c => {
                                     return Err(ErrorKind::Expected('|', c)
                                         .context(ErrorKind::Block(self.start.unwrap()))
-                                        .into())
+                                        .into());
                                 }
                             }
                         }
@@ -516,17 +516,18 @@ impl<'a> Block<'a> {
     fn match_hard_line(&self, c: char) -> bool {
         let idx = self.skip_whitespace_virtual();
         // match the newline, and then...
-        c == '\n' && match self.get(idx) {
-            // match the first colon
-            Some(':') => match self.get(idx + 1) {
-                // match the second colon: we're done
-                Some(':') => true,
+        c == '\n'
+            && match self.get(idx) {
+                // match the first colon
+                Some(':') => match self.get(idx + 1) {
+                    // match the second colon: we're done
+                    Some(':') => true,
+                    _ => false,
+                },
+                // end of block after newline and whitespace; this is the end of a hard line
+                None => true,
                 _ => false,
-            },
-            // end of block after newline and whitespace; this is the end of a hard line
-            None => true,
-            _ => false,
-        }
+            }
     }
 
     /// Appends elements to the given `document::Text` object up until the character matching the
@@ -740,7 +741,7 @@ impl<'a> Deref for Block<'a> {
 mod tests {
     use std::io::BufReader;
 
-    use input::Input;
+    use crate::input::Input;
 
     use super::*;
 

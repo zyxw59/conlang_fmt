@@ -4,7 +4,7 @@ use std::default::Default;
 
 use failure::ResultExt;
 
-use errors::{ErrorKind, Result as EResult};
+use crate::errors::{ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
 
@@ -229,7 +229,10 @@ impl UpdateParam for Contents {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("max_level") => {
-                self.max_level = param.1.parse::<usize>().with_context(|_| ErrorKind::Parse)?;
+                self.max_level = param
+                    .1
+                    .parse::<usize>()
+                    .with_context(|_| ErrorKind::Parse)?;
                 None
             }
             _ => Some(param),
@@ -410,11 +413,17 @@ impl UpdateParam for Cell {
                 None
             }
             Some("rows") => {
-                self.rows = param.1.parse::<usize>().with_context(|_| ErrorKind::Parse)?;
+                self.rows = param
+                    .1
+                    .parse::<usize>()
+                    .with_context(|_| ErrorKind::Parse)?;
                 None
             }
             Some("cols") => {
-                self.cols = param.1.parse::<usize>().with_context(|_| ErrorKind::Parse)?;
+                self.cols = param
+                    .1
+                    .parse::<usize>()
+                    .with_context(|_| ErrorKind::Parse)?;
                 None
             }
             Some(_) => Some(param),

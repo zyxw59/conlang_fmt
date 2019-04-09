@@ -1,8 +1,3 @@
-extern crate failure;
-#[macro_use]
-extern crate failure_derive;
-extern crate itertools;
-
 mod document;
 mod errors;
 mod input;
@@ -18,7 +13,7 @@ fn main() {
     loop {
         let mut block = match input.next_block() {
             Err(e) => {
-                print_errors(e);
+                print_errors(&e);
                 continue;
             }
             Ok(block) => block,
@@ -28,7 +23,7 @@ fn main() {
         }
         match block.parse() {
             Err(e) => {
-                print_errors(e);
+                print_errors(&e);
                 continue;
             }
             Ok(block) => println!("{:?}", block),
@@ -36,8 +31,8 @@ fn main() {
     }
 }
 
-fn print_errors(e: impl Fail) {
-    for c in e.causes() {
+fn print_errors(e: &dyn Fail) {
+    for c in e.iter_chain() {
         println!("{}", c);
     }
 }
