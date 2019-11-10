@@ -94,7 +94,7 @@ impl<'a> Block<'a> {
                     update_multiple!(self, toc, common);
                     self.text_rest(&mut toc.title)?;
                     document::Block {
-                        kind: document::BlockType::Contents(toc),
+                        kind: Box::new(toc),
                         common,
                     }
                 }
@@ -111,7 +111,7 @@ impl<'a> Block<'a> {
                         list.items.push(item);
                     }
                     document::Block {
-                        kind: document::BlockType::List(list),
+                        kind: Box::new(list),
                         common,
                     }
                 }
@@ -184,7 +184,7 @@ impl<'a> Block<'a> {
                         }
                     }
                     document::Block {
-                        kind: document::BlockType::Table(table),
+                        kind: Box::new(table),
                         common,
                     }
                 }
@@ -254,7 +254,7 @@ impl<'a> Block<'a> {
                         }
                     }
                     document::Block {
-                        kind: document::BlockType::Gloss(gloss),
+                        kind: Box::new(gloss),
                         common,
                     }
                 }
@@ -270,8 +270,9 @@ impl<'a> Block<'a> {
             Some('#') => {
                 // count the `#`s
                 while let Some('#') = self.next() {}
-                // this is the number of `#`s.
-                let level = self.idx - start;
+                // this is the number of `#`s. Subtract 1 because we're now at the char *after* the
+                // last `#`.
+                let level = self.idx - start - 1;
                 // then rewind one character, we don't want to eat the character _after_ the `#`s.
                 self.idx -= 1;
                 let mut heading = document::Heading::new();
@@ -280,7 +281,7 @@ impl<'a> Block<'a> {
                 update_multiple!(self, heading, common);
                 self.text_rest(&mut heading.title)?;
                 document::Block {
-                    kind: document::BlockType::Heading(heading),
+                    kind: Box::new(heading),
                     common,
                 }
             }
@@ -797,7 +798,10 @@ mod tests {
     #[test]
     fn parameters_multiple() {
         block!(block = r#"[id=foo, class=bar]"#);
-        assert_eq!(block.parameters().unwrap(), parameters!["id": "foo", "class": "bar"]);
+        assert_eq!(
+            block.parameters().unwrap(),
+            parameters!["id": "foo", "class": "bar"]
+        );
     }
 
     #[test]
@@ -840,10 +844,7 @@ mod tests {
         block!(block = r#"*emphasis*"#);
         let mut text = document::Text::new();
         block.text_rest(&mut text).unwrap();
-        assert_eq!(
-            text,
-            text!(Emphasis("emphasis"), (" "))
-        )
+        assert_eq!(text, text!(Emphasis("emphasis"), (" ")))
     }
 
     #[test]
@@ -851,10 +852,7 @@ mod tests {
         block!(block = r#"**strong**"#);
         let mut text = document::Text::new();
         block.text_rest(&mut text).unwrap();
-        assert_eq!(
-            text,
-            text!(Strong("strong"), (" "))
-        )
+        assert_eq!(text, text!(Strong("strong"), (" ")))
     }
 
     macro_rules! list {
@@ -872,14 +870,28 @@ mod tests {
     fn list() {
         block!(block = ":list:\n::1\n::2\n ::2a\n ::2b\n::3");
         let block = block.parse().unwrap().unwrap();
-        if let document::BlockType::List(list) = block.kind {
-            assert!(!list.ordered);
-            assert_eq!(
-                list.items,
-                list!["1": [], "2": ["2a": [], "2b": []], "3": []]
-            );
-        } else {
-            unreachable!();
-        }
+        let list = block.kind.as_list().unwrap();
+        assert!(!list.ordered);
+        assert_eq!(
+            list.items,
+            list!["1": [], "2": ["2a": [], "2b": []], "3": []]
+        );
+    }
+
+    #[test]
+    fn heading() {
+        block!(block = "# Test");
+        let block = block.parse().unwrap().unwrap();
+        let heading = block.kind.as_heading().unwrap();
+        assert_eq!(
+            heading,
+            &document::Heading {
+                title: " Test ".into(),
+                numbered: true,
+                toc: true,
+                level: 1,
+                children: vec![],
+            }
+        );
     }
 }

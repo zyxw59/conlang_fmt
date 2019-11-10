@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::default::Default;
+use std::fmt::Debug;
 
 use failure::ResultExt;
 
@@ -8,7 +9,7 @@ use crate::errors::{ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default)]
 pub struct Document {
     /// A list of blocks in the document
     blocks: Vec<Block>,
@@ -27,35 +28,32 @@ impl Document {
     /// Adds the given block to the document.
     pub fn add_block(&mut self, block: Block) -> EResult<()> {
         let idx = self.blocks.len();
-        match block.kind {
-            BlockType::Heading(Heading { level, .. }) => {
-                if level == 1 || self.sections.len() == 0 {
-                    self.sections.push(idx);
-                } else {
-                    // get index into `blocks` of last section
-                    let mut curr = *self.sections.last().unwrap();
-                    loop {
-                        match self.blocks[curr].kind {
-                            BlockType::Heading(ref mut h) => {
-                                if h.level == level - 1 {
-                                    // add this section to its parent and break
-                                    h.children.push(idx);
-                                    break;
-                                } else {
-                                    // get index into `blocks` of last subsection
-                                    curr = *h.children.last().unwrap();
-                                }
-                            }
-                            // All blocks in the heading tree should be headings; there's no other
-                            // chance for them to get added
-                            _ => unreachable!(),
-                        }
+        if let Some(&Heading { level, .. }) = block.kind.as_heading() {
+            if level == 1 || self.sections.len() == 0 {
+                self.sections.push(idx);
+            } else {
+                // get index into `blocks` of last section
+                let mut curr = *self.sections.last().unwrap();
+                loop {
+                    // All blocks in the heading tree should be headings; there's no other
+                    // chance for them to get added
+                    let h = self.blocks[curr].kind.as_mut_heading().unwrap();
+                    if h.level == level - 1 {
+                        // add this section to its parent and break
+                        h.children.push(idx);
+                        break;
+                    } else {
+                        // get index into `blocks` of last subsection
+                        curr = *h.children.last().unwrap();
                     }
                 }
             }
-            BlockType::Table(_) => self.tables.push(idx),
-            BlockType::Gloss(_) => self.glosses.push(idx),
-            _ => {}
+        }
+        if block.kind.is_table() {
+            self.tables.push(idx);
+        }
+        if block.kind.is_gloss() {
+            self.glosses.push(idx);
         }
         let id = block.common.id.clone();
         if !id.is_empty() {
@@ -92,9 +90,9 @@ impl UpdateParam for String {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct Block {
-    pub kind: BlockType,
+    pub kind: Box<dyn BlockType>,
     pub common: BlockCommon,
 }
 
@@ -110,7 +108,7 @@ impl UpdateParam for Block {
 impl From<Text> for Block {
     fn from(t: Text) -> Block {
         Block {
-            kind: BlockType::Paragraph(t),
+            kind: Box::new(t),
             common: Default::default(),
         }
     }
@@ -144,26 +142,41 @@ impl UpdateParam for BlockCommon {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum BlockType {
-    Heading(Heading),
-    Contents(Contents),
-    List(List),
-    Table(Table),
-    Gloss(Gloss),
-    Paragraph(Text),
+pub trait BlockType: Debug {
+    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(Some(param))
+    }
+
+    /// Returns a `&Heading` if the block is a heading, otherwise returns `None`.
+    fn as_heading(&self) -> Option<&Heading> {
+        None
+    }
+
+    /// Returns a `&mut Heading` if the block is a heading, otherwise returns `None`.
+    fn as_mut_heading(&mut self) -> Option<&mut Heading> {
+        None
+    }
+
+    #[cfg(test)]
+    fn as_list(&self) -> Option<&List> {
+        None
+    }
+
+    /// Returns whether the block should be included in the list of tables.
+    fn is_table(&self) -> bool {
+        false
+    }
+
+    /// Returns whether the block should be included in the list of glosses.
+    fn is_gloss(&self) -> bool {
+        false
+    }
 }
 
-impl UpdateParam for BlockType {
+impl<T: BlockType> UpdateParam for T {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
-        match *self {
-            BlockType::Heading(ref mut heading) => heading.update_param(param),
-            BlockType::Contents(ref mut contents) => contents.update_param(param),
-            BlockType::List(ref mut list) => list.update_param(param),
-            BlockType::Table(ref mut table) => table.update_param(param),
-            BlockType::Gloss(ref mut gloss) => gloss.update_param(param),
-            BlockType::Paragraph(_) => Ok(Some(param)),
-        }
+        BlockType::update_param(self, param)
     }
 }
 
@@ -182,7 +195,7 @@ impl Heading {
     }
 }
 
-impl UpdateParam for Heading {
+impl BlockType for Heading {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
@@ -198,6 +211,14 @@ impl UpdateParam for Heading {
                 _ => Some(param),
             },
         })
+    }
+
+    fn as_heading(&self) -> Option<&Heading> {
+        Some(self)
+    }
+
+    fn as_mut_heading(&mut self) -> Option<&mut Heading> {
+        Some(self)
     }
 }
 
@@ -225,7 +246,7 @@ impl Contents {
     }
 }
 
-impl UpdateParam for Contents {
+impl BlockType for Contents {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("max_level") => {
@@ -261,7 +282,7 @@ impl List {
     }
 }
 
-impl UpdateParam for List {
+impl BlockType for List {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
@@ -273,6 +294,11 @@ impl UpdateParam for List {
                 _ => Some(param),
             },
         })
+    }
+
+    #[cfg(test)]
+    fn as_list(&self) -> Option<&List> {
+        Some(self)
     }
 }
 
@@ -302,7 +328,7 @@ impl Table {
     }
 }
 
-impl UpdateParam for Table {
+impl BlockType for Table {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
@@ -446,7 +472,7 @@ impl Gloss {
     }
 }
 
-impl UpdateParam for Gloss {
+impl BlockType for Gloss {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
@@ -537,6 +563,8 @@ impl Text {
         }])
     }
 }
+
+impl BlockType for Text {}
 
 impl<T> From<T> for Text
 where
