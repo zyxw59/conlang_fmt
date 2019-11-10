@@ -745,159 +745,138 @@ mod tests {
 
     use super::*;
 
+    macro_rules! block {
+        ($id:ident = $str:expr) => {
+            let slice = $str.as_bytes();
+            let mut input = Input::new(slice);
+            let mut $id = input.next_block().unwrap();
+        };
+    }
+
     #[test]
     fn block_iter() {
-        let input_str = r#"block 1, line 1"#.as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
+        block!(block = r#"block 1, line 1"#);
         assert_eq!(block.start(), Some(0));
         assert_eq!(block.peek(), Some('b'));
         assert_eq!(block.next(), Some('b'));
     }
 
+    macro_rules! parameter {
+        ($value:tt) => {
+            Parameter(None, $value.into())
+        };
+        ($name:tt: $value:tt) => {
+            Parameter(Some($name.into()), $value.into())
+        };
+    }
+
+    macro_rules! parameters {
+        ($($name:tt $(: $value:tt)?),*) => {
+            vec![$(parameter!($name $(: $value)?),)*]
+        };
+    }
+
     #[test]
     fn parameters_nameless() {
-        let input_str = r#"[nameless]"#.as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
-        let param = block.parameters().unwrap();
-        assert_eq!(param, vec![Parameter(None, String::from("nameless"))]);
+        block!(block = r#"[nameless]"#);
+        assert_eq!(block.parameters().unwrap(), parameters!["nameless"]);
     }
 
     #[test]
     fn parameters_named() {
-        let input_str = r#"[class=foo]"#.as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
-        let param = block.parameters().unwrap();
-        assert_eq!(
-            param,
-            vec![Parameter(Some(String::from("class")), String::from("foo"))]
-        );
+        block!(block = r#"[class=foo]"#);
+        assert_eq!(block.parameters().unwrap(), parameters!["class": "foo"]);
     }
 
     #[test]
     fn parameters_space() {
-        let input_str = r#"[ nameless ]"#.as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
-        let param = block.parameters().unwrap();
-        assert_eq!(param, vec![Parameter(None, String::from("nameless"))]);
+        block!(block = r#"[ nameless ]"#);
+        assert_eq!(block.parameters().unwrap(), parameters!["nameless"]);
     }
 
     #[test]
     fn parameters_multiple() {
-        let input_str = r#"[id=foo, class=bar]"#.as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
-        let param = block.parameters().unwrap();
-        assert_eq!(
-            param,
-            vec![
-                Parameter(Some(String::from("id")), String::from("foo")),
-                Parameter(Some(String::from("class")), String::from("bar")),
-            ]
-        );
+        block!(block = r#"[id=foo, class=bar]"#);
+        assert_eq!(block.parameters().unwrap(), parameters!["id": "foo", "class": "bar"]);
     }
 
     #[test]
     fn parameters_none() {
-        let input_str = "0\n::".as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
+        block!(block = "0\n::");
         block.idx += 1;
-        let param = block.parameters().unwrap();
-        assert_eq!(param, Vec::new());
-        let newline = block.next().unwrap();
-        assert_eq!(newline, '\n');
-        assert!(block.match_hard_line(newline));
+        assert_eq!(block.parameters().unwrap(), parameters![]);
+        assert_eq!(block.next().unwrap(), '\n');
+        assert!(block.match_hard_line('\n'));
     }
 
     #[test]
     fn directive() {
-        let input_str = ":foo:x".as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
+        block!(block = ":foo:x");
         block.next();
-        let dir = block.directive().unwrap();
-        assert_eq!(dir, "foo");
+        assert_eq!(block.directive().unwrap(), "foo");
         assert_eq!(block.next(), Some('x'));
+    }
+
+    macro_rules! text {
+        ($($($type:ident)? ($text:tt)),*) => {
+            $crate::document::Text(vec![$(inline!($($type)? ($text))),*])
+        }
+    }
+
+    macro_rules! inline {
+        ($type:ident ($text:tt)) => {
+            $crate::document::Inline {
+                kind: $crate::document::InlineType::$type($text.into()),
+                common: Default::default(),
+            }
+        };
+        (($text:tt)) => {
+            String::from($text).into()
+        };
     }
 
     #[test]
     fn text_emphasis() {
-        let input_str = r#"*emphasis*"#.as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
+        block!(block = r#"*emphasis*"#);
         let mut text = document::Text::new();
-        assert!(block.text_rest(&mut text).is_ok());
+        block.text_rest(&mut text).unwrap();
         assert_eq!(
             text,
-            document::Text(vec![
-                document::Inline {
-                    kind: document::InlineType::Emphasis("emphasis".into()),
-                    common: Default::default(),
-                },
-                document::Inline::from(String::from(" ")),
-            ])
+            text!(Emphasis("emphasis"), (" "))
         )
     }
 
     #[test]
     fn text_strong() {
-        let input_str = r#"**strong**"#.as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let mut block = input.next_block().unwrap();
+        block!(block = r#"**strong**"#);
         let mut text = document::Text::new();
-        assert!(block.text_rest(&mut text).is_ok());
+        block.text_rest(&mut text).unwrap();
         assert_eq!(
             text,
-            document::Text(vec![
-                document::Inline {
-                    kind: document::InlineType::Strong("strong".into()),
-                    common: Default::default(),
-                },
-                document::Inline::from(String::from(" ")),
-            ])
+            text!(Strong("strong"), (" "))
         )
+    }
+
+    macro_rules! list {
+        ($($text:tt: [$($sl:tt)*]),*) => {
+            vec![$(
+                $crate::document::ListItem {
+                    text: $text.into(),
+                    sublist: list![$($sl)*],
+                },
+            )*]
+        }
     }
 
     #[test]
     fn list() {
-        let input_str = ":list:\n::1\n::2\n ::2a\n ::2b\n::3".as_bytes();
-        let mut input = Input::new(BufReader::new(input_str));
-        let block = input.next_block().unwrap().parse().unwrap().unwrap();
+        block!(block = ":list:\n::1\n::2\n ::2a\n ::2b\n::3");
+        let block = block.parse().unwrap().unwrap();
         if let document::BlockType::List(list) = block.kind {
             assert!(!list.ordered);
             assert_eq!(
-                list.items[0],
-                document::ListItem {
-                    text: "1".into(),
-                    sublist: vec![],
-                }
-            );
-            assert_eq!(
-                list.items[1],
-                document::ListItem {
-                    text: "2".into(),
-                    sublist: vec![
-                        document::ListItem {
-                            text: "2a".into(),
-                            sublist: vec![],
-                        },
-                        document::ListItem {
-                            text: "2b".into(),
-                            sublist: vec![],
-                        },
-                    ],
-                }
-            );
-            assert_eq!(
-                list.items[2],
-                document::ListItem {
-                    text: "3".into(),
-                    sublist: vec![],
-                }
+                list.items,
+                list!["1": [], "2": ["2a": [], "2b": []], "3": []]
             );
         } else {
             unreachable!();
