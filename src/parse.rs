@@ -86,211 +86,218 @@ impl<'a> Block<'a> {
         let start = self.idx;
         Ok(Some(match self.next() {
             Some(':') => match self.directive()?.as_ref() {
-                "toc" => {
-                    let mut toc = document::Contents::new();
-                    let mut common = document::BlockCommon::new();
-                    update_multiple!(self, toc, common);
-                    self.text_rest(&mut toc.title)?;
-                    document::Block {
-                        kind: Box::new(toc),
-                        common,
-                    }
-                }
-                "list" => {
-                    let mut list = document::List::new();
-                    let mut common = document::BlockCommon::new();
-                    update_multiple!(self, list, common);
-                    while self.idx < self.len() {
-                        let indent = self.skip_whitespace_virtual() - self.idx;
-                        self.idx += indent + 2;
-                        let mut item = document::ListItem::new();
-                        self.text_until_hard_line(&mut item.text)?;
-                        self.list_tree(indent, &mut item.sublist)?;
-                        list.items.push(item);
-                    }
-                    document::Block {
-                        kind: Box::new(list),
-                        common,
-                    }
-                }
-                "table" => {
-                    let mut table = document::Table::new();
-                    let mut common = document::BlockCommon::new();
-                    update_multiple!(self, table, common);
-                    self.text_until_char(&mut table.title, '\n')?;
-                    // put the newline back on the stack, since it's needed for `match_hard_line`
-                    self.idx -= 1;
-                    // match column parameters
-                    while let Some(c) = self.next() {
-                        match c {
-                            // new cell
-                            '|' => {
-                                let mut col = document::Column::new();
-                                update_multiple!(self, col);
-                                table.columns.push(col);
-                            }
-                            // end of column parameter row
-                            c if self.match_hard_line(c) => break,
-                            // skip
-                            c if c.is_whitespace() => {}
-                            // error
-                            c => {
-                                return Err(ErrorKind::Expected('|', c)
-                                    .context(ErrorKind::Block(self.start.unwrap()))
-                                    .into());
-                            }
-                        }
-                    }
-                    // now we've matched a hard line; time to start constructing the rows of the
-                    // table
-                    while let Some(_) = self.peek() {
-                        self.skip_whitespace();
-                        // skip until after the double colon
-                        self.idx += 2;
-                        let mut row = document::Row::new();
-                        update_multiple!(self, row);
-                        // match the cells
-                        while let Some(c) = self.next() {
-                            match c {
-                                // new cell
-                                '|' => {
-                                    let mut cell = document::Cell::new();
-                                    update_multiple!(self, cell);
-                                    self.text_until(&mut cell.text, |slf, c| {
-                                        c == '|' || slf.match_hard_line(c)
-                                    })?;
-                                    // rewind to put the pipe or newline back
-                                    self.idx -= 1;
-                                    row.cells.push(cell);
-                                    match self.peek() {
-                                        Some('|') => {}
-                                        _ => break,
-                                    }
-                                }
-                                '\n' if self.match_hard_line('\n') => break,
-                                c if c.is_whitespace() => {}
-                                c => {
-                                    return Err(ErrorKind::Expected('|', c)
-                                        .context(ErrorKind::Block(self.start.unwrap()))
-                                        .into());
-                                }
-                            }
-                        }
-                        // now push the row and loop
-                        if !row.cells.is_empty() {
-                            table.rows.push(row);
-                        }
-                    }
-                    document::Block {
-                        kind: Box::new(table),
-                        common,
-                    }
-                }
-                "gloss" => {
-                    let mut gloss = document::Gloss::new();
-                    let mut common = document::BlockCommon::new();
-                    update_multiple!(self, gloss, common);
-                    self.text_until_hard_line(&mut gloss.title)?;
-                    // now we've matched a hard line; time to start constructing the lines of the
-                    // gloss
-                    while let Some(_) = self.peek() {
-                        self.skip_whitespace();
-                        // skip until after the double colon
-                        self.idx += 2;
-                        let mut class = String::new();
-                        let mut kind = document::GlossLineType::Split;
-                        update_multiple!(self, kind, class);
-                        // check whether it's a nosplit:
-                        match kind {
-                            document::GlossLineType::NoSplit => {
-                                let mut line = Default::default();
-                                // add the rest of the line
-                                self.text_until_hard_line(&mut line)?;
-                                // add class if there was one in the parameters
-                                if !class.is_empty() {
-                                    line = line.with_class(class);
-                                }
-                                // if we've matched split lines, this must be in the postamble,
-                                // otherwise it's the preamble
-                                if gloss.gloss.is_empty() {
-                                    gloss.preamble.push(line);
-                                } else {
-                                    gloss.postamble.push(line);
-                                }
-                            }
-                            document::GlossLineType::Split => {
-                                // check if we've already entered the postamble; a gloss line here
-                                // is an error
-                                if !gloss.postamble.is_empty() {
-                                    return Err(ErrorKind::GlossLine
-                                        .context(ErrorKind::Block(self.start.unwrap()))
-                                        .into());
-                                }
-                                let mut line = document::GlossLine::new();
-                                line.class = class;
-                                while let Some(c) = self.next() {
-                                    match c {
-                                        // break if we're at a hard line break
-                                        '\n' if self.match_hard_line('\n') => break,
-                                        // otherwise, skip whitespace
-                                        c if c.is_whitespace() => {}
-                                        // non-whitespace; start a new word
-                                        _ => {
-                                            let mut word = Default::default();
-                                            // rewind, since we want to include the character we
-                                            // matched
-                                            self.idx -= 1;
-                                            self.text_until(&mut word, |_, c| c.is_whitespace())?;
-                                            // rewind, since `text_until` consumes the whitespace
-                                            self.idx -= 1;
-                                            line.push(word);
-                                        }
-                                    }
-                                }
-                                gloss.gloss.push(line);
-                            }
-                        }
-                    }
-                    document::Block {
-                        kind: Box::new(gloss),
-                        common,
-                    }
-                }
-                _ => {
-                    // this directive is an inline directive; rewind and parse the block as a
-                    // paragraph
-                    self.idx = start;
-                    let mut text = document::Text::new();
-                    self.text_rest(&mut text)?;
-                    text.into()
-                }
+                "toc" => self.parse_toc()?,
+                "list" => self.parse_list()?,
+                "table" => self.parse_table()?,
+                "gloss" => self.parse_gloss()?,
+                // any other directive is an inline directive; rewind and parse the block as a
+                // paragraph
+                _ => self.parse_paragraph(start)?,
             },
-            Some('#') => {
-                // count the `#`s
-                while let Some('#') = self.next() {}
-                // this is the number of `#`s. Subtract 1 because we're now at the char *after* the
-                // last `#`.
-                let level = self.idx - start - 1;
-                // then rewind one character, we don't want to eat the character _after_ the `#`s.
-                self.idx -= 1;
-                let mut heading = document::Heading::new();
-                heading.level = level;
-                let mut common = document::BlockCommon::new();
-                update_multiple!(self, heading, common);
-                self.text_rest(&mut heading.title)?;
-                document::Block {
-                    kind: Box::new(heading),
-                    common,
-                }
-            }
-            Some(_) => {
-                self.idx = start;
-                let mut text = document::Text::new();
-                self.text_rest(&mut text)?;
-                text.into()
-            }
+            Some('#') => self.parse_heading(start)?,
+            Some(_) => self.parse_paragraph(start)?,
             None => return Ok(None),
         }))
+    }
+
+    fn parse_toc(&mut self) -> EResult<document::Block> {
+        let mut toc = document::Contents::new();
+        let mut common = document::BlockCommon::new();
+        update_multiple!(self, toc, common);
+        self.text_rest(&mut toc.title)?;
+        Ok(document::Block {
+            kind: Box::new(toc),
+            common,
+        })
+    }
+
+    fn parse_list(&mut self) -> EResult<document::Block> {
+        let mut list = document::List::new();
+        let mut common = document::BlockCommon::new();
+        update_multiple!(self, list, common);
+        while self.idx < self.len() {
+            let indent = self.skip_whitespace_virtual() - self.idx;
+            self.idx += indent + 2;
+            let mut item = document::ListItem::new();
+            self.text_until_hard_line(&mut item.text)?;
+            self.list_tree(indent, &mut item.sublist)?;
+            list.items.push(item);
+        }
+        Ok(document::Block {
+            kind: Box::new(list),
+            common,
+        })
+    }
+
+    fn parse_table(&mut self) -> EResult<document::Block> {
+        let mut table = document::Table::new();
+        let mut common = document::BlockCommon::new();
+        update_multiple!(self, table, common);
+        self.text_until_char(&mut table.title, '\n')?;
+        // put the newline back on the stack, since it's needed for `match_hard_line`
+        self.idx -= 1;
+        // match column parameters
+        while let Some(c) = self.next() {
+            match c {
+                // new cell
+                '|' => {
+                    let mut col = document::Column::new();
+                    update_multiple!(self, col);
+                    table.columns.push(col);
+                }
+                // end of column parameter row
+                c if self.match_hard_line(c) => break,
+                // skip
+                c if c.is_whitespace() => {}
+                // error
+                c => {
+                    return Err(ErrorKind::Expected('|', c)
+                        .context(ErrorKind::Block(self.start.unwrap()))
+                        .into());
+                }
+            }
+        }
+        // now we've matched a hard line; time to start constructing the rows of the
+        // table
+        while let Some(_) = self.peek() {
+            self.skip_whitespace();
+            // skip until after the double colon
+            self.idx += 2;
+            let mut row = document::Row::new();
+            update_multiple!(self, row);
+            // match the cells
+            while let Some(c) = self.next() {
+                match c {
+                    // new cell
+                    '|' => {
+                        let mut cell = document::Cell::new();
+                        update_multiple!(self, cell);
+                        self.text_until(&mut cell.text, |slf, c| {
+                            c == '|' || slf.match_hard_line(c)
+                        })?;
+                        // rewind to put the pipe or newline back
+                        self.idx -= 1;
+                        row.cells.push(cell);
+                        match self.peek() {
+                            Some('|') => {}
+                            _ => break,
+                        }
+                    }
+                    '\n' if self.match_hard_line('\n') => break,
+                    c if c.is_whitespace() => {}
+                    c => {
+                        return Err(ErrorKind::Expected('|', c)
+                            .context(ErrorKind::Block(self.start.unwrap()))
+                            .into());
+                    }
+                }
+            }
+            // now push the row and loop
+            if !row.cells.is_empty() {
+                table.rows.push(row);
+            }
+        }
+        Ok(document::Block {
+            kind: Box::new(table),
+            common,
+        })
+    }
+
+    fn parse_gloss(&mut self) -> EResult<document::Block> {
+        let mut gloss = document::Gloss::new();
+        let mut common = document::BlockCommon::new();
+        update_multiple!(self, gloss, common);
+        self.text_until_hard_line(&mut gloss.title)?;
+        // now we've matched a hard line; time to start constructing the lines of the
+        // gloss
+        while let Some(_) = self.peek() {
+            self.skip_whitespace();
+            // skip until after the double colon
+            self.idx += 2;
+            let mut class = String::new();
+            let mut kind = document::GlossLineType::Split;
+            update_multiple!(self, kind, class);
+            // check whether it's a nosplit:
+            match kind {
+                document::GlossLineType::NoSplit => {
+                    let mut line = Default::default();
+                    // add the rest of the line
+                    self.text_until_hard_line(&mut line)?;
+                    // add class if there was one in the parameters
+                    if !class.is_empty() {
+                        line = line.with_class(class);
+                    }
+                    // if we've matched split lines, this must be in the postamble,
+                    // otherwise it's the preamble
+                    if gloss.gloss.is_empty() {
+                        gloss.preamble.push(line);
+                    } else {
+                        gloss.postamble.push(line);
+                    }
+                }
+                document::GlossLineType::Split => {
+                    // check if we've already entered the postamble; a gloss line here
+                    // is an error
+                    if !gloss.postamble.is_empty() {
+                        return Err(ErrorKind::GlossLine
+                            .context(ErrorKind::Block(self.start.unwrap()))
+                            .into());
+                    }
+                    let mut line = document::GlossLine::new();
+                    line.class = class;
+                    while let Some(c) = self.next() {
+                        match c {
+                            // break if we're at a hard line break
+                            '\n' if self.match_hard_line('\n') => break,
+                            // otherwise, skip whitespace
+                            c if c.is_whitespace() => {}
+                            // non-whitespace; start a new word
+                            _ => {
+                                let mut word = Default::default();
+                                // rewind, since we want to include the character we
+                                // matched
+                                self.idx -= 1;
+                                self.text_until(&mut word, |_, c| c.is_whitespace())?;
+                                // rewind, since `text_until` consumes the whitespace
+                                self.idx -= 1;
+                                line.push(word);
+                            }
+                        }
+                    }
+                    gloss.gloss.push(line);
+                }
+            }
+        }
+        Ok(document::Block {
+            kind: Box::new(gloss),
+            common,
+        })
+    }
+
+    fn parse_heading(&mut self, start: usize) -> EResult<document::Block> {
+        // count the `#`s
+        while let Some('#') = self.next() {}
+        // this is the number of `#`s. Subtract 1 because we're now at the char *after* the
+        // last `#`.
+        let level = self.idx - start - 1;
+        // then rewind one character, we don't want to eat the character _after_ the `#`s.
+        self.idx -= 1;
+        let mut heading = document::Heading::new();
+        heading.level = level;
+        let mut common = document::BlockCommon::new();
+        update_multiple!(self, heading, common);
+        self.text_rest(&mut heading.title)?;
+        Ok(document::Block {
+            kind: Box::new(heading),
+            common,
+        })
+    }
+
+    fn parse_paragraph(&mut self, start: usize) -> EResult<document::Block> {
+        self.idx = start;
+        let mut text = document::Text::new();
+        self.text_rest(&mut text)?;
+        Ok(text.into())
     }
 
     /// Recursively appends list items to the given vector
