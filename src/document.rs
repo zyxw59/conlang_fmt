@@ -29,7 +29,7 @@ impl Document {
     pub fn add_block(&mut self, block: Block) -> EResult<()> {
         let idx = self.blocks.len();
         if let Some(&Heading { level, .. }) = block.kind.as_heading() {
-            if level == 1 || self.sections.len() == 0 {
+            if level == 1 || self.sections.is_empty() {
                 self.sections.push(idx);
             } else {
                 // get index into `blocks` of last section

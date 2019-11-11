@@ -41,21 +41,19 @@ macro_rules! update_multiple {
 macro_rules! update_one {
     ( $self:ident, $param:expr, $first: expr, $( $x:expr ),* ) => {
         {
-            match $first.update_param($param)? {
+            if let Some(param) = $first.update_param($param)? {
                 // if the parameter is returned, try the next argument.
-                Some(param) => update_one!($self, param, $( $x ),*),
-                // otherwise, we're done.
-                None => {}
+                update_one!($self, param, $( $x ),*)
             }
+            // otherwise, we're done.
         }
     };
     ( $self:ident, $param:expr, $last:expr ) => {
         {
-            match $last.update_param($param)? {
+            if let Some(param) = $last.update_param($param)? {
                 // we can unwrap because `common` will always catch the `None` case
                 // (and treat it as a class).
-                Some(param) => $self.parameter_error(param.0.unwrap())?,
-                None => {}
+                $self.parameter_error(param.0.unwrap())?
             }
         }
     };
@@ -179,7 +177,7 @@ impl<'a> Block<'a> {
                             }
                         }
                         // now push the row and loop
-                        if row.cells.len() > 0 {
+                        if !row.cells.is_empty() {
                             table.rows.push(row);
                         }
                     }
@@ -209,12 +207,12 @@ impl<'a> Block<'a> {
                                 // add the rest of the line
                                 self.text_until_hard_line(&mut line)?;
                                 // add class if there was one in the parameters
-                                if class.len() != 0 {
+                                if !class.is_empty() {
                                     line = line.with_class(class);
                                 }
                                 // if we've matched split lines, this must be in the postamble,
                                 // otherwise it's the preamble
-                                if gloss.gloss.len() == 0 {
+                                if gloss.gloss.is_empty() {
                                     gloss.preamble.push(line);
                                 } else {
                                     gloss.postamble.push(line);
@@ -223,7 +221,7 @@ impl<'a> Block<'a> {
                             document::GlossLineType::Split => {
                                 // check if we've already entered the postamble; a gloss line here
                                 // is an error
-                                if gloss.postamble.len() != 0 {
+                                if !gloss.postamble.is_empty() {
                                     return Err(ErrorKind::GlossLine
                                         .context(ErrorKind::Block(self.start.unwrap()))
                                         .into());
@@ -350,7 +348,9 @@ impl<'a> Block<'a> {
                             // rewind, since the character we matched might be part of the
                             // parameter.
                             self.idx -= 1;
-                            self.parameter()?.map(|p| params.push(p));
+                            if let Some(p) = self.parameter()? {
+                                params.push(p);
+                            }
                         }
                     }
                 }
@@ -417,8 +417,8 @@ impl<'a> Block<'a> {
                 }
             }
         }
-        let name = param_builder.iter().filter(|w| w.len() > 0).join(" ");
-        if name.len() == 0 {
+        let name = param_builder.iter().filter(|w| !w.is_empty()).join(" ");
+        if name.is_empty() {
             Ok(None)
         } else {
             match value {
@@ -475,7 +475,7 @@ impl<'a> Block<'a> {
                 }
             }
         }
-        Ok(param_builder.iter().filter(|w| w.len() > 0).join(" "))
+        Ok(param_builder.iter().filter(|w| !w.is_empty()).join(" "))
     }
 
     /// Pushes contents of a `{}`-delimited group to the given buffer, assuming the first `{` has
@@ -611,7 +611,7 @@ impl<'a> Block<'a> {
                 _ => buffer.push(c),
             }
         }
-        if buffer.len() != 0 {
+        if !buffer.is_empty() {
             text.push(buffer);
         }
         Ok(())

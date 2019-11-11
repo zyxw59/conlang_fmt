@@ -36,14 +36,14 @@ where
             // unwrap line
             let line = line.with_context(|e| ErrorKind::from_io(e, line_number))?;
             // blank lines
-            if line.trim().len() == 0 {
+            if line.trim().is_empty() {
                 // if the buffer is empty, don't return anything
-                if self.buffer.len() > 0 {
+                if !self.buffer.is_empty() {
                     // but if it's not, we've reached the end of a block
                     break;
                 }
             } else {
-                if self.buffer.len() == 0 {
+                if self.buffer.is_empty() {
                     // if this is the first line of the block, set the start line
                     start_line = Some(line_number);
                 }
