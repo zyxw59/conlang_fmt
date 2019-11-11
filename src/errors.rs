@@ -66,14 +66,19 @@ pub enum ErrorKind {
     #[fail(display = "Invalid UTF-8 in line {}", _0)]
     Unicode(usize),
     #[fail(display = "An IO error occurred while reading line {}", _0)]
-    Io(usize),
+    ReadIo(usize),
+    #[fail(
+        display = "An IO error occurred while writing block starting on line {}",
+        _0
+    )]
+    WriteIo(usize),
 }
 
 impl ErrorKind {
-    pub fn from_io(err: &io::Error, line: usize) -> ErrorKind {
+    pub fn input_error(err: &io::Error, line: usize) -> ErrorKind {
         match err.kind() {
             io::ErrorKind::InvalidData => ErrorKind::Unicode(line),
-            _ => ErrorKind::Io(line),
+            _ => ErrorKind::ReadIo(line),
         }
     }
 }

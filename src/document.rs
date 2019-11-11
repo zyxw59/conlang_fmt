@@ -2,12 +2,34 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::default::Default;
 use std::fmt::Debug;
+use std::io::{Result as IoResult, Write};
 
 use failure::ResultExt;
+use htmlescape::encode_attribute_w;
 
 use crate::errors::{ErrorKind, Result as EResult};
 
 type OResult<T> = EResult<Option<T>>;
+
+/// Writes an attribute/value pair, escaping the value as necessary.
+fn write_attribute(w: &mut impl Write, attr: &str, value: &str) -> IoResult<()> {
+    write!(w, r#"{}=""#, attr)?;
+    encode_attribute_w(value, w)?;
+    write!(w, r#"" "#)
+}
+
+/// Writes a section number recursively.
+fn write_section_number(w: &mut impl Write, number: &[usize]) -> IoResult<()> {
+    write!(w, "<span ")?;
+    write_attribute(w, "class", "secnum")?;
+    write!(w, ">")?;
+    if let Some((last, rest)) = number.split_last() {
+        write_section_number(w, rest)?;
+        write!(w, "{}.</span>", last)
+    } else {
+        write!(w, "</span>")
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Document {
@@ -26,19 +48,22 @@ pub struct Document {
 
 impl Document {
     /// Adds the given block to the document.
-    pub fn add_block(&mut self, block: Block) -> EResult<()> {
+    pub fn add_block(&mut self, mut block: Block) -> EResult<()> {
         let idx = self.blocks.len();
-        if let Some(&Heading { level, .. }) = block.kind.as_heading() {
-            if level == 1 || self.sections.is_empty() {
+        if let Some(Heading { level, number, .. }) = block.kind.as_mut_heading() {
+            if *level == 1 || self.sections.is_empty() {
                 self.sections.push(idx);
+                number.push(self.sections.len());
             } else {
                 // get index into `blocks` of last section
                 let mut curr = *self.sections.last().unwrap();
+                number.push(self.sections.len());
                 loop {
                     // All blocks in the heading tree should be headings; there's no other
                     // chance for them to get added
                     let h = self.blocks[curr].kind.as_mut_heading().unwrap();
-                    if h.level == level - 1 {
+                    number.push(h.children.len());
+                    if h.level == *level - 1 {
                         // add this section to its parent and break
                         h.children.push(idx);
                         break;
@@ -105,24 +130,19 @@ impl UpdateParam for Block {
     }
 }
 
-impl From<Text> for Block {
-    fn from(t: Text) -> Block {
-        Block {
-            kind: Box::new(t),
-            common: Default::default(),
-        }
-    }
-}
-
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct BlockCommon {
     pub class: String,
     pub id: String,
+    pub start_line: usize,
 }
 
 impl BlockCommon {
-    pub fn new() -> BlockCommon {
-        Default::default()
+    pub fn new(start_line: usize) -> BlockCommon {
+        BlockCommon {
+            start_line,
+            ..Default::default()
+        }
     }
 }
 
@@ -143,6 +163,11 @@ impl UpdateParam for BlockCommon {
 }
 
 pub trait BlockType: Debug {
+    /// Outputs the block.
+    fn write(&self, w: &mut dyn Write, common: &BlockCommon, document: &Document) -> IoResult<()> {
+        unimplemented!();
+    }
+
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(Some(param))
@@ -187,15 +212,53 @@ pub struct Heading {
     pub toc: bool,
     pub level: usize,
     pub children: Vec<usize>,
+    pub number: Vec<usize>,
 }
 
 impl Heading {
     pub fn new() -> Heading {
         Default::default()
     }
+
+    fn tag(&self) -> &'static str {
+        match self.level {
+            1 => "h1",
+            2 => "h2",
+            3 => "h3",
+            4 => "h4",
+            5 => "h5",
+            6 => "h6",
+            _ => "span",
+        }
+    }
 }
 
 impl BlockType for Heading {
+    fn write(
+        &self,
+        mut w: &mut dyn Write,
+        common: &BlockCommon,
+        document: &Document,
+    ) -> IoResult<()> {
+        // start tag
+        write!(w, "<{} ", self.tag())?;
+        write_attribute(&mut w, "id", &common.id)?;
+        write!(w, r#"class=""#)?;
+        encode_attribute_w(&common.class, &mut w)?;
+        if self.level > 6 {
+            // we're just using a `span` tag, so the heading level must be specified as a class
+            write!(w, r#" h{}">"#, self.level)?;
+        } else {
+            // we're using a proper heading tag, so no need to specify the heading level as a class
+            write!(w, r#"">"#)?;
+        }
+        if self.numbered {
+            write_section_number(&mut w, &self.number)?;
+        }
+        self.title.write_inline(w, &document)?;
+        write!(w, "</ {}>", self.tag())
+    }
+
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
@@ -230,6 +293,7 @@ impl Default for Heading {
             toc: true,
             level: Default::default(),
             children: Default::default(),
+            number: Default::default(),
         }
     }
 }
@@ -244,9 +308,64 @@ impl Contents {
     pub fn new() -> Contents {
         Default::default()
     }
+
+    fn write_sublist(
+        &self,
+        w: &mut impl Write,
+        level: usize,
+        list: &[usize],
+        document: &Document,
+    ) -> IoResult<()> {
+        if !list.is_empty() && level <= self.max_level {
+            writeln!(w, "<ol>")?;
+            // flag for when we need to set number manually.
+            let mut manual_number = false;
+            for &e in list {
+                let block = &document.blocks[e];
+                let heading = block.kind.as_heading().unwrap();
+                if !heading.numbered {
+                    write!(w, r#"<li class="nonumber">"#)?;
+                    manual_number = true;
+                } else if manual_number {
+                    write!(w, r#"<li value="{}">"#, heading.number.last().unwrap())?;
+                    manual_number = false;
+                } else {
+                    write!(w, "<li>")?;
+                }
+                if heading.toc {
+                    heading.title.write_inline(w, document)?;
+                }
+                self.write_sublist(w, level + 1, &heading.children, &document)?;
+                writeln!(w, "</li>")?;
+            }
+            writeln!(w, "</ol>")?;
+        }
+        Ok(())
+    }
 }
 
 impl BlockType for Contents {
+    fn write(
+        &self,
+        mut w: &mut dyn Write,
+        common: &BlockCommon,
+        document: &Document,
+    ) -> IoResult<()> {
+        write!(w, "<div")?;
+        write_attribute(&mut w, "id", &common.id)?;
+        write!(w, r#"class=""#)?;
+        encode_attribute_w(&common.class, &mut w)?;
+        write!(w, " toc")?;
+        write!(w, r#"">"#)?;
+        write!(w, "<span ")?;
+        write_attribute(&mut w, "class", "toc-header")?;
+        write!(w, ">")?;
+        self.title.write_inline(w, &document)?;
+        writeln!(w, "</span>")?;
+        self.write_sublist(&mut w, 1, &document.sections, &document)?;
+        write!(w, "</div>")
+    }
+
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("max_level") => {
@@ -280,9 +399,43 @@ impl List {
     pub fn new() -> List {
         Default::default()
     }
+
+    fn tag(ordered: bool) -> &'static str {
+        if ordered {
+            "ol"
+        } else {
+            "ul"
+        }
+    }
+
+    fn write_list(
+        w: &mut impl Write,
+        items: &[ListItem],
+        ordered: bool,
+        document: &Document,
+    ) -> IoResult<()> {
+        for item in items {
+            item.write(w, ordered, document)?;
+        }
+        Ok(())
+    }
 }
 
 impl BlockType for List {
+    fn write(
+        &self,
+        mut w: &mut dyn Write,
+        common: &BlockCommon,
+        document: &Document,
+    ) -> IoResult<()> {
+        write!(w, "<{} ", List::tag(self.ordered))?;
+        write_attribute(&mut w, "id", &common.id)?;
+        write_attribute(&mut w, "class", &common.class)?;
+        writeln!(w, ">")?;
+        List::write_list(&mut w, &self.items, self.ordered, document)?;
+        write!(w, "</{}>", List::tag(self.ordered))
+    }
+
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
@@ -311,6 +464,17 @@ pub struct ListItem {
 impl ListItem {
     pub fn new() -> ListItem {
         Default::default()
+    }
+
+    fn write(&self, w: &mut impl Write, ordered: bool, document: &Document) -> IoResult<()> {
+        write!(w, "<li>")?;
+        self.text.write_inline(w, document)?;
+        if !self.sublist.is_empty() {
+            writeln!(w, "<{}>", List::tag(ordered))?;
+            List::write_list(w, &self.sublist, ordered, document)?;
+            writeln!(w, "</{}>", List::tag(ordered))?;
+        }
+        writeln!(w, "</li>")
     }
 }
 
@@ -561,6 +725,10 @@ impl Text {
                 class: class.into(),
             },
         }])
+    }
+
+    fn write_inline(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
+        unimplemented!();
     }
 }
 

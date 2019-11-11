@@ -34,7 +34,7 @@ where
         self.buffer.clear();
         while let Some((line_number, line)) = self.lines.next() {
             // unwrap line
-            let line = line.with_context(|e| ErrorKind::from_io(e, line_number))?;
+            let line = line.with_context(|e| ErrorKind::input_error(e, line_number))?;
             // blank lines
             if line.trim().is_empty() {
                 // if the buffer is empty, don't return anything

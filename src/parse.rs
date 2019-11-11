@@ -102,7 +102,7 @@ impl<'a> Block<'a> {
 
     fn parse_toc(&mut self) -> EResult<document::Block> {
         let mut toc = document::Contents::new();
-        let mut common = document::BlockCommon::new();
+        let mut common = document::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, toc, common);
         self.text_rest(&mut toc.title)?;
         Ok(document::Block {
@@ -113,7 +113,7 @@ impl<'a> Block<'a> {
 
     fn parse_list(&mut self) -> EResult<document::Block> {
         let mut list = document::List::new();
-        let mut common = document::BlockCommon::new();
+        let mut common = document::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, list, common);
         while self.idx < self.len() {
             let indent = self.skip_whitespace_virtual() - self.idx;
@@ -131,7 +131,7 @@ impl<'a> Block<'a> {
 
     fn parse_table(&mut self) -> EResult<document::Block> {
         let mut table = document::Table::new();
-        let mut common = document::BlockCommon::new();
+        let mut common = document::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, table, common);
         self.text_until_char(&mut table.title, '\n')?;
         // put the newline back on the stack, since it's needed for `match_hard_line`
@@ -205,7 +205,7 @@ impl<'a> Block<'a> {
 
     fn parse_gloss(&mut self) -> EResult<document::Block> {
         let mut gloss = document::Gloss::new();
-        let mut common = document::BlockCommon::new();
+        let mut common = document::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, gloss, common);
         self.text_until_hard_line(&mut gloss.title)?;
         // now we've matched a hard line; time to start constructing the lines of the
@@ -284,7 +284,7 @@ impl<'a> Block<'a> {
         self.idx -= 1;
         let mut heading = document::Heading::new();
         heading.level = level;
-        let mut common = document::BlockCommon::new();
+        let mut common = document::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, heading, common);
         self.text_rest(&mut heading.title)?;
         Ok(document::Block {
@@ -296,8 +296,12 @@ impl<'a> Block<'a> {
     fn parse_paragraph(&mut self, start: usize) -> EResult<document::Block> {
         self.idx = start;
         let mut text = document::Text::new();
+        let common = document::BlockCommon::new(self.start.unwrap());
         self.text_rest(&mut text)?;
-        Ok(text.into())
+        Ok(document::Block {
+            kind: Box::new(text),
+            common,
+        })
     }
 
     /// Recursively appends list items to the given vector
@@ -747,8 +751,6 @@ impl<'a> Deref for Block<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::BufReader;
-
     use crate::input::Input;
 
     use super::*;
@@ -897,7 +899,7 @@ mod tests {
                 numbered: true,
                 toc: true,
                 level: 1,
-                children: vec![],
+                ..Default::default()
             }
         );
     }
