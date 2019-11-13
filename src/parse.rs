@@ -282,8 +282,7 @@ impl<'a> Block<'a> {
         let level = self.idx - start - 1;
         // then rewind one character, we don't want to eat the character _after_ the `#`s.
         self.idx -= 1;
-        let mut heading = document::Heading::new();
-        heading.level = level;
+        let mut heading = document::Heading::new(level);
         let mut common = document::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, heading, common);
         self.text_rest(&mut heading.title)?;
@@ -584,7 +583,7 @@ impl<'a> Block<'a> {
                 '_' => {
                     push_and_renew!(buffer: String::new(), text);
                     text.push(self.formatting_inline(
-                        '*',
+                        '_',
                         document::InlineType::Italics,
                         document::InlineType::Bold,
                     )?);

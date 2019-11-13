@@ -61,7 +61,8 @@ Parameters are placed immediately after the last `#`.
   > Note: this parameter should only be used to disable numbering for a single
   > heading.
   > Use CSS to disable numbering for an entire level of headings.
-- `notoc`: Do not include this heading in the table of contents.
+- `notoc`: Do not include this heading in the table of contents. This implies
+    `nonumber`.
   > Note: this parameter should only be used to prevent a single heading from
   > appearing in the table of contents.
   > Use parameters on the table of contents itself to hide an entire level of

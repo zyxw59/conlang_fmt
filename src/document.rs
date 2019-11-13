@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use std::default::Default;
 use std::fmt::Debug;
 use std::io::{Result as IoResult, Write};
+use std::ops::Deref;
 
 use failure::ResultExt;
-use htmlescape::encode_attribute_w;
+use htmlescape::encode_minimal_w;
 
 use crate::errors::{ErrorKind, Result as EResult};
 
@@ -14,21 +15,20 @@ type OResult<T> = EResult<Option<T>>;
 /// Writes an attribute/value pair, escaping the value as necessary.
 fn write_attribute(w: &mut impl Write, attr: &str, value: &str) -> IoResult<()> {
     write!(w, r#"{}=""#, attr)?;
-    encode_attribute_w(value, w)?;
+    encode_minimal_w(value, w)?;
     write!(w, r#"" "#)
 }
 
 /// Writes a section number recursively.
 fn write_section_number(w: &mut impl Write, number: &[usize]) -> IoResult<()> {
-    write!(w, "<span ")?;
-    write_attribute(w, "class", "secnum")?;
-    write!(w, ">")?;
     if let Some((last, rest)) = number.split_last() {
+        write!(w, "<span ")?;
+        write_attribute(w, "class", "secnum")?;
+        write!(w, ">")?;
         write_section_number(w, rest)?;
-        write!(w, "{}.</span>", last)
-    } else {
-        write!(w, "</span>")
+        write!(w, "{}.</span>", last)?;
     }
+    Ok(())
 }
 
 #[derive(Debug, Default)]
@@ -37,7 +37,7 @@ pub struct Document {
     blocks: Vec<Block>,
     /// A list of indices into the `blocks` field corresponding to the top-level section headings
     /// of the document.
-    sections: Vec<usize>,
+    sections: SectionList,
     /// A list of indices into the `blocks` field corresponding to the tables of the document.
     tables: Vec<usize>,
     /// A list of indices into the `blocks` field corresponding to the glosses of the document.
@@ -49,30 +49,39 @@ pub struct Document {
 impl Document {
     /// Adds the given block to the document.
     pub fn add_block(&mut self, mut block: Block) -> EResult<()> {
-        let idx = self.blocks.len();
-        if let Some(Heading { level, number, .. }) = block.kind.as_mut_heading() {
-            if *level == 1 || self.sections.is_empty() {
-                self.sections.push(idx);
-                number.push(self.sections.len());
-            } else {
-                // get index into `blocks` of last section
-                let mut curr = *self.sections.last().unwrap();
-                number.push(self.sections.len());
-                loop {
-                    // All blocks in the heading tree should be headings; there's no other
-                    // chance for them to get added
-                    let h = self.blocks[curr].kind.as_mut_heading().unwrap();
-                    number.push(h.children.len());
-                    if h.level == *level - 1 {
-                        // add this section to its parent and break
-                        h.children.push(idx);
-                        break;
-                    } else {
-                        // get index into `blocks` of last subsection
-                        curr = *h.children.last().unwrap();
-                    }
+        let mut idx = self.blocks.len();
+        if let Some(heading) = block.kind.as_mut_heading() {
+            let mut curr = None;
+            while self.get_section_list(curr).level < heading.level() {
+                let curr_level = self.get_section_list(curr).level;
+                if self.get_section_list(curr).is_empty() {
+                    // insert filler section
+                    self.blocks.push(FillerHeading::new(curr_level + 1).into());
+                    self.get_mut_section_list(curr).push(idx, false);
+                    // since we inserted another block before the one we're working on
+                    idx += 1;
+                }
+                if heading.numbered() {
+                    heading.push_number(self.get_section_list(curr).last_child_number);
+                }
+                // move to next child
+                curr = self.get_section_list(curr).last().cloned();
+            }
+            // now, insert the heading into its direct parent.
+            if !heading.numbered() {
+                // if this is a nonumber heading, its last_child_number is the same as it's older
+                // sibling's, if such a sibling exists (otherwise last_child_number should remain
+                // the default 0)
+                if let Some(&older_sibling) = self.get_section_list(curr).last() {
+                    heading.mut_children().last_child_number =
+                        self.get_section_list(Some(older_sibling)).last_child_number;
                 }
             }
+            if heading.numbered() {
+                heading.push_number(self.get_section_list(curr).last_child_number + 1);
+            }
+            self.get_mut_section_list(curr)
+                .push(idx, heading.numbered());
         }
         if block.kind.is_table() {
             self.tables.push(idx);
@@ -83,15 +92,100 @@ impl Document {
         let id = block.common.id.clone();
         if !id.is_empty() {
             match self.ids.entry(id) {
-                Entry::Occupied(e) => Err(ErrorKind::Id(e.key().clone()).into()),
-                Entry::Vacant(e) => {
-                    e.insert(idx);
-                    Ok(())
-                }
-            }
-        } else {
-            Ok(())
+                Entry::Occupied(e) => return Err(ErrorKind::Id(e.key().clone()).into()),
+                Entry::Vacant(e) => e.insert(idx),
+            };
         }
+        self.blocks.push(block);
+        Ok(())
+    }
+
+    /// Writes the blocks as HTML.
+    pub fn write(&self, w: &mut impl Write) -> EResult<()> {
+        for Block { kind, common } in &self.blocks {
+            kind.write(w, common, self)
+                .context(ErrorKind::WriteIo(common.start_line))?;
+        }
+        Ok(())
+    }
+
+    /// Get a reference to the specified block as a heading.
+    ///
+    /// Panics if the specified block doesn't exist or isn't a heading.
+    fn get_heading(&self, block_index: usize) -> &dyn HeadingLike {
+        self.blocks[block_index].kind.as_heading().unwrap()
+    }
+
+    /// Get a mutable reference to the specified block as a heading.
+    ///
+    /// Panics if the specified block doesn't exist or isn't a heading.
+    fn get_mut_heading(&mut self, block_index: usize) -> &mut HeadingLike {
+        self.blocks[block_index].kind.as_mut_heading().unwrap()
+    }
+
+    /// Get a reference to the children of the specified block, or the root section list if none is
+    /// specified.
+    ///
+    /// Panics if the specified block doesn't exist or isn't a heading.
+    fn get_section_list(&self, block_index: Option<usize>) -> &SectionList {
+        if let Some(idx) = block_index {
+            self.get_heading(idx).children()
+        } else {
+            &self.sections
+        }
+    }
+
+    /// Get a mutable reference to the children of the specified block, or the root section list if
+    /// none is specified.
+    ///
+    /// Panics if the specified block doesn't exist or isn't a heading.
+    fn get_mut_section_list(&mut self, block_index: Option<usize>) -> &mut SectionList {
+        if let Some(idx) = block_index {
+            self.get_mut_heading(idx).mut_children()
+        } else {
+            &mut self.sections
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct SectionList {
+    headings: Vec<usize>,
+    last_child_number: usize,
+    level: usize,
+}
+
+impl SectionList {
+    fn new(level: usize) -> SectionList {
+        SectionList {
+            level,
+            ..Default::default()
+        }
+    }
+
+    fn push(&mut self, index: usize, numbered: bool) {
+        self.headings.push(index);
+        if numbered {
+            self.last_child_number += 1;
+        }
+    }
+}
+
+impl Default for SectionList {
+    fn default() -> SectionList {
+        SectionList {
+            headings: Default::default(),
+            last_child_number: 0,
+            level: 1,
+        }
+    }
+}
+
+impl Deref for SectionList {
+    type Target = [usize];
+
+    fn deref(&self) -> &[usize] {
+        &self.headings
     }
 }
 
@@ -130,6 +224,15 @@ impl UpdateParam for Block {
     }
 }
 
+impl<T: BlockType + 'static> From<T> for Block {
+    fn from(kind: T) -> Block {
+        Block {
+            kind: Box::new(kind),
+            common: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct BlockCommon {
     pub class: String,
@@ -164,22 +267,20 @@ impl UpdateParam for BlockCommon {
 
 pub trait BlockType: Debug {
     /// Outputs the block.
-    fn write(&self, w: &mut dyn Write, common: &BlockCommon, document: &Document) -> IoResult<()> {
-        unimplemented!();
-    }
+    fn write(&self, w: &mut dyn Write, common: &BlockCommon, document: &Document) -> IoResult<()>;
 
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(Some(param))
     }
 
-    /// Returns a `&Heading` if the block is a heading, otherwise returns `None`.
-    fn as_heading(&self) -> Option<&Heading> {
+    /// Returns a `&dyn HeadingLike` if the block is a heading, otherwise returns `None`.
+    fn as_heading(&self) -> Option<&dyn HeadingLike> {
         None
     }
 
-    /// Returns a `&mut Heading` if the block is a heading, otherwise returns `None`.
-    fn as_mut_heading(&mut self) -> Option<&mut Heading> {
+    /// Returns a `&mut dyn HeadingLike` if the block is a heading, otherwise returns `None`.
+    fn as_mut_heading(&mut self) -> Option<&mut dyn HeadingLike> {
         None
     }
 
@@ -205,19 +306,34 @@ impl<T: BlockType> UpdateParam for T {
     }
 }
 
+pub trait HeadingLike {
+    fn numbered(&self) -> bool;
+    fn toc(&self) -> bool;
+    fn level(&self) -> usize;
+    fn children(&self) -> &SectionList;
+    fn mut_children(&mut self) -> &mut SectionList;
+    fn number(&self) -> &[usize];
+    fn push_number(&mut self, value: usize);
+    fn title(&self) -> &Text;
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct Heading {
     pub title: Text,
     pub numbered: bool,
     pub toc: bool,
     pub level: usize,
-    pub children: Vec<usize>,
+    pub children: SectionList,
     pub number: Vec<usize>,
 }
 
 impl Heading {
-    pub fn new() -> Heading {
-        Default::default()
+    pub fn new(level: usize) -> Heading {
+        Heading {
+            level,
+            children: SectionList::new(level + 1),
+            ..Default::default()
+        }
     }
 
     fn tag(&self) -> &'static str {
@@ -228,7 +344,7 @@ impl Heading {
             4 => "h4",
             5 => "h5",
             6 => "h6",
-            _ => "span",
+            _ => "p",
         }
     }
 }
@@ -244,9 +360,9 @@ impl BlockType for Heading {
         write!(w, "<{} ", self.tag())?;
         write_attribute(&mut w, "id", &common.id)?;
         write!(w, r#"class=""#)?;
-        encode_attribute_w(&common.class, &mut w)?;
+        encode_minimal_w(&common.class, &mut w)?;
         if self.level > 6 {
-            // we're just using a `span` tag, so the heading level must be specified as a class
+            // we're just using a `p` tag, so the heading level must be specified as a class
             write!(w, r#" h{}">"#, self.level)?;
         } else {
             // we're using a proper heading tag, so no need to specify the heading level as a class
@@ -256,7 +372,7 @@ impl BlockType for Heading {
             write_section_number(&mut w, &self.number)?;
         }
         self.title.write_inline(w, &document)?;
-        write!(w, "</ {}>", self.tag())
+        writeln!(w, "</{}>\n", self.tag())
     }
 
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
@@ -276,12 +392,46 @@ impl BlockType for Heading {
         })
     }
 
-    fn as_heading(&self) -> Option<&Heading> {
+    fn as_heading(&self) -> Option<&dyn HeadingLike> {
         Some(self)
     }
 
-    fn as_mut_heading(&mut self) -> Option<&mut Heading> {
+    fn as_mut_heading(&mut self) -> Option<&mut dyn HeadingLike> {
         Some(self)
+    }
+}
+
+impl HeadingLike for Heading {
+    fn numbered(&self) -> bool {
+        self.numbered && self.toc
+    }
+
+    fn toc(&self) -> bool {
+        self.toc
+    }
+
+    fn level(&self) -> usize {
+        self.level
+    }
+
+    fn children(&self) -> &SectionList {
+        &self.children
+    }
+
+    fn mut_children(&mut self) -> &mut SectionList {
+        &mut self.children
+    }
+
+    fn number(&self) -> &[usize] {
+        &self.number
+    }
+
+    fn push_number(&mut self, value: usize) {
+        self.number.push(value);
+    }
+
+    fn title(&self) -> &Text {
+        &self.title
     }
 }
 
@@ -295,6 +445,69 @@ impl Default for Heading {
             children: Default::default(),
             number: Default::default(),
         }
+    }
+}
+
+#[derive(Debug, Default, Eq, PartialEq)]
+struct FillerHeading {
+    children: SectionList,
+}
+
+impl FillerHeading {
+    fn new(level: usize) -> FillerHeading {
+        FillerHeading {
+            children: SectionList {
+                level,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+}
+
+impl BlockType for FillerHeading {
+    fn write(&self, _: &mut dyn Write, _: &BlockCommon, _: &Document) -> IoResult<()> {
+        Ok(())
+    }
+
+    fn as_heading(&self) -> Option<&dyn HeadingLike> {
+        Some(self)
+    }
+
+    fn as_mut_heading(&mut self) -> Option<&mut dyn HeadingLike> {
+        Some(self)
+    }
+}
+
+impl HeadingLike for FillerHeading {
+    fn numbered(&self) -> bool {
+        false
+    }
+
+    fn toc(&self) -> bool {
+        false
+    }
+
+    fn level(&self) -> usize {
+        self.children.level - 1
+    }
+
+    fn children(&self) -> &SectionList {
+        &self.children
+    }
+
+    fn mut_children(&mut self) -> &mut SectionList {
+        &mut self.children
+    }
+
+    fn number(&self) -> &[usize] {
+        &[]
+    }
+
+    fn push_number(&mut self, _: usize) {}
+
+    fn title(&self) -> &Text {
+        EMPTY_TEXT
     }
 }
 
@@ -320,25 +533,29 @@ impl Contents {
             writeln!(w, "<ol>")?;
             // flag for when we need to set number manually.
             let mut manual_number = false;
+            if let Some(&e) = list.first() {
+                if let Some(&number) = document.get_heading(e).number().last() {
+                    manual_number = number != 1;
+                }
+            }
             for &e in list {
-                let block = &document.blocks[e];
-                let heading = block.kind.as_heading().unwrap();
-                if !heading.numbered {
+                let heading = document.get_heading(e);
+                if !heading.numbered() {
                     write!(w, r#"<li class="nonumber">"#)?;
                     manual_number = true;
                 } else if manual_number {
-                    write!(w, r#"<li value="{}">"#, heading.number.last().unwrap())?;
+                    write!(w, r#"<li value="{}">"#, heading.number().last().unwrap())?;
                     manual_number = false;
                 } else {
                     write!(w, "<li>")?;
                 }
-                if heading.toc {
-                    heading.title.write_inline(w, document)?;
+                if heading.toc() {
+                    heading.title().write_inline(w, document)?;
                 }
-                self.write_sublist(w, level + 1, &heading.children, &document)?;
+                self.write_sublist(w, level + 1, heading.children(), &document)?;
                 writeln!(w, "</li>")?;
             }
-            writeln!(w, "</ol>")?;
+            writeln!(w, "</ol>\n")?;
         }
         Ok(())
     }
@@ -351,19 +568,19 @@ impl BlockType for Contents {
         common: &BlockCommon,
         document: &Document,
     ) -> IoResult<()> {
-        write!(w, "<div")?;
+        write!(w, "<div ")?;
         write_attribute(&mut w, "id", &common.id)?;
         write!(w, r#"class=""#)?;
-        encode_attribute_w(&common.class, &mut w)?;
+        encode_minimal_w(&common.class, &mut w)?;
         write!(w, " toc")?;
         write!(w, r#"">"#)?;
-        write!(w, "<span ")?;
-        write_attribute(&mut w, "class", "toc-header")?;
+        write!(w, "<p ")?;
+        write_attribute(&mut w, "class", "toc-heading")?;
         write!(w, ">")?;
         self.title.write_inline(w, &document)?;
-        writeln!(w, "</span>")?;
+        writeln!(w, "</p>")?;
         self.write_sublist(&mut w, 1, &document.sections, &document)?;
-        write!(w, "</div>")
+        writeln!(w, "</div>\n")
     }
 
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
@@ -433,7 +650,7 @@ impl BlockType for List {
         write_attribute(&mut w, "class", &common.class)?;
         writeln!(w, ">")?;
         List::write_list(&mut w, &self.items, self.ordered, document)?;
-        write!(w, "</{}>", List::tag(self.ordered))
+        write!(w, "</{}>\n", List::tag(self.ordered))
     }
 
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
@@ -493,6 +710,54 @@ impl Table {
 }
 
 impl BlockType for Table {
+    fn write(
+        &self,
+        mut w: &mut dyn Write,
+        common: &BlockCommon,
+        document: &Document,
+    ) -> IoResult<()> {
+        write!(w, "<table ")?;
+        write_attribute(&mut w, "id", &common.id)?;
+        write_attribute(&mut w, "class", &common.class)?;
+        writeln!(w, ">")?;
+        write!(w, "<caption>")?;
+        self.title.write_inline(w, document)?;
+        writeln!(w, "</caption>")?;
+        // for recording when a cell is a continuation from an earlier row, to correctly count
+        // columns
+        let mut continuation_cells = Vec::<usize>::with_capacity(self.columns.len());
+        for row in &self.rows {
+            write!(w, "<tr ")?;
+            write_attribute(&mut w, "class", &row.class)?;
+            write!(w, ">")?;
+            let mut col = 0;
+            for cell in &row.cells {
+                // increment col until we get to a free column
+                while let Some(n) = continuation_cells.get_mut(col) {
+                    if *n > 0 {
+                        // decrement n while we're at it.
+                        *n -= 1;
+                        col += 1;
+                    } else {
+                        break;
+                    }
+                }
+                // update continuation_cells if this cell has rowspan or colspan greater than 1
+                // first, resize `continuation_cells` so that it can hold all the columns.
+                if continuation_cells.len() < col + cell.cols {
+                    continuation_cells.resize(col + cell.cols, 0);
+                }
+                for n in &mut continuation_cells[col..col + cell.cols] {
+                    *n = cell.rows.max(*n).saturating_sub(1);
+                }
+                cell.write(&mut w, row, self.columns.get(col), document)?;
+                col += cell.cols;
+            }
+            writeln!(w, "</tr>")?;
+        }
+        writeln!(w, "</table>\n")
+    }
+
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
@@ -581,7 +846,7 @@ impl UpdateParam for Column {
     }
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Cell {
     pub rows: usize,
     pub cols: usize,
@@ -592,6 +857,54 @@ pub struct Cell {
 impl Cell {
     pub fn new() -> Cell {
         Default::default()
+    }
+
+    fn write(
+        &self,
+        w: &mut impl Write,
+        row: &Row,
+        col: Option<&Column>,
+        document: &Document,
+    ) -> IoResult<()> {
+        let header_row = row.header;
+        let header_col = col.map(|col| col.header).unwrap_or(false);
+        if header_row {
+            write!(w, "<th ")?;
+            if self.cols > 1 {
+                write_attribute(w, "scope", "colgroup")?;
+            } else {
+                write_attribute(w, "scope", "col")?;
+            }
+        } else if header_col {
+            write!(w, "<th ")?;
+            if self.rows > 1 {
+                write_attribute(w, "scope", "rowgroup")?;
+            } else {
+                write_attribute(w, "scope", "row")?;
+            }
+        } else {
+            write!(w, "<td ")?;
+        }
+        if self.cols > 1 {
+            write_attribute(w, "colspan", &format!("{}", self.cols))?;
+        }
+        if self.rows > 1 {
+            write_attribute(w, "rowspan", &format!("{}", self.rows))?;
+        }
+        write!(w, r#"class=""#)?;
+        encode_minimal_w(&self.class, w)?;
+        if let Some(col) = col {
+            write!(w, " ")?;
+            encode_minimal_w(&col.class, w)?;
+        }
+        write!(w, r#"">"#)?;
+        self.text.write_inline(w, document)?;
+        if header_row || header_col {
+            write!(w, "</th>")?;
+        } else {
+            write!(w, "</td>")?;
+        }
+        Ok(())
     }
 }
 
@@ -621,6 +934,17 @@ impl UpdateParam for Cell {
     }
 }
 
+impl Default for Cell {
+    fn default() -> Cell {
+        Cell {
+            rows: 1,
+            cols: 1,
+            class: Default::default(),
+            text: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct Gloss {
     pub title: Text,
@@ -637,6 +961,71 @@ impl Gloss {
 }
 
 impl BlockType for Gloss {
+    fn write(
+        &self,
+        mut w: &mut dyn Write,
+        common: &BlockCommon,
+        document: &Document,
+    ) -> IoResult<()> {
+        write!(w, "<div ")?;
+        write_attribute(&mut w, "id", &common.id)?;
+        write!(w, r#"class="gloss "#)?;
+        encode_minimal_w(&common.class, &mut w)?;
+        write!(w, r#"">"#)?;
+        write!(w, r#"<p class="gloss-heading">"#)?;
+        self.title.write_inline(w, document)?;
+        writeln!(w, "</p>")?;
+        for line in &self.preamble {
+            write!(w, r#"<p class="preamble">"#)?;
+            line.write_inline(w, document)?;
+            writeln!(w, "</p>")?;
+        }
+        // get the length of the longest gloss line. If there are no lines, skip writing the gloss
+        if let Some(num_words) = self.gloss.iter().map(|line| line.words.len()).max() {
+            // flag whether to add a space before the next word.
+            let mut add_space = false;
+            for i in 0..num_words {
+                let head_word = self.gloss[0].words.get(i);
+                let is_prefix = match head_word {
+                    Some(word) => word.starts_with('-'),
+                    None => false,
+                };
+                if add_space || !is_prefix {
+                    write!(w, " ")?;
+                }
+                write!(w, "<dl>")?;
+                write!(w, "<dt ")?;
+                write_attribute(&mut w, "class", &self.gloss[0].class)?;
+                write!(w, ">")?;
+                if let Some(text) = head_word {
+                    text.write_inline(w, document)?;
+                }
+                write!(w, "</dt>")?;
+                for line in &self.gloss[1..] {
+                    write!(w, "<dd ")?;
+                    write_attribute(&mut w, "class", &line.class)?;
+                    write!(w, ">")?;
+                    if let Some(text) = line.words.get(i) {
+                        text.write_inline(w, document)?;
+                    }
+                    write!(w, "</dd>")?;
+                }
+                write!(w, "</dl>")?;
+                add_space = match head_word {
+                    Some(word) => word.ends_with('-'),
+                    None => false,
+                };
+            }
+        }
+        for line in &self.postamble {
+            write!(w, r#"<p class="postamble">"#)?;
+            line.write_inline(w, document)?;
+            writeln!(w, "</p>")?;
+        }
+        writeln!(w, "</div>\n")?;
+        Ok(())
+    }
+
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
@@ -709,6 +1098,8 @@ impl Default for GlossLineType {
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct Text(pub Vec<Inline>);
 
+const EMPTY_TEXT: &'static Text = &Text(Vec::new());
+
 impl Text {
     pub fn new() -> Text {
         Default::default()
@@ -728,11 +1119,35 @@ impl Text {
     }
 
     fn write_inline(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
-        unimplemented!();
+        for t in &self.0 {
+            t.kind.write(w, &t.common, document)?;
+        }
+        Ok(())
+    }
+
+    fn starts_with(&self, c: char) -> bool {
+        match self.0.first() {
+            Some(inline) => inline.kind.starts_with(c),
+            None => false,
+        }
+    }
+
+    fn ends_with(&self, c: char) -> bool {
+        match self.0.last() {
+            Some(inline) => inline.kind.ends_with(c),
+            None => false,
+        }
     }
 }
 
-impl BlockType for Text {}
+impl BlockType for Text {
+    fn write(&self, w: &mut dyn Write, _common: &BlockCommon, document: &Document) -> IoResult<()> {
+        write!(w, "<p>")?;
+        self.write_inline(w, document)?;
+        writeln!(w, "</p>\n")?;
+        Ok(())
+    }
+}
 
 impl<T> From<T> for Text
 where
@@ -750,6 +1165,8 @@ pub struct Inline {
     pub kind: InlineType,
     pub common: InlineCommon,
 }
+
+impl Inline {}
 
 impl<T> From<(InlineType, T)> for Inline
 where
@@ -824,6 +1241,90 @@ impl InlineType {
 
     pub fn reference() -> InlineType {
         InlineType::Reference(Default::default())
+    }
+
+    fn write(
+        &self,
+        mut w: &mut dyn Write,
+        common: &InlineCommon,
+        document: &Document,
+    ) -> IoResult<()> {
+        if let Some(tag) = self.tag() {
+            write!(w, "<{} ", tag)?;
+            write!(w, r#"class="{} "#, self.class())?;
+            encode_minimal_w(&common.class, &mut w)?;
+            write!(w, r#"" "#)?;
+            if let InlineType::Link(link) = self {
+                write_attribute(&mut w, "href", &link.url)?;
+            }
+            write!(w, ">")?;
+        }
+        match self {
+            InlineType::Emphasis(t)
+            | InlineType::Strong(t)
+            | InlineType::Italics(t)
+            | InlineType::Bold(t)
+            | InlineType::SmallCaps(t)
+            | InlineType::Span(t)
+            | InlineType::Link(Link { title: t, .. }) => t.write_inline(w, &document)?,
+            InlineType::Text(s) => write!(w, "{}", s)?,
+            InlineType::Reference(id) => unimplemented!(),
+            InlineType::Replace(id) => unimplemented!(),
+        }
+        if let Some(tag) = self.tag() {
+            write!(w, "</{}>", tag)?;
+        }
+        Ok(())
+    }
+
+    fn tag(&self) -> Option<&'static str> {
+        use self::InlineType::*;
+        match self {
+            Emphasis(_) => Some("em"),
+            Strong(_) => Some("strong"),
+            Italics(_) => Some("i"),
+            Bold(_) => Some("b"),
+            Link(_) => Some("a"),
+            Text(_) => None,
+            _ => Some("span"),
+        }
+    }
+
+    fn class(&self) -> &'static str {
+        use self::InlineType::*;
+        match self {
+            SmallCaps(_) => "small-caps",
+            Reference(_) => "reference",
+            _ => "",
+        }
+    }
+
+    fn starts_with(&self, c: char) -> bool {
+        match self {
+            InlineType::Emphasis(t)
+            | InlineType::Strong(t)
+            | InlineType::Italics(t)
+            | InlineType::Bold(t)
+            | InlineType::SmallCaps(t)
+            | InlineType::Span(t)
+            | InlineType::Link(Link { title: t, .. }) => t.starts_with(c),
+            InlineType::Text(s) => s.starts_with(c),
+            _ => false,
+        }
+    }
+
+    fn ends_with(&self, c: char) -> bool {
+        match self {
+            InlineType::Emphasis(t)
+            | InlineType::Strong(t)
+            | InlineType::Italics(t)
+            | InlineType::Bold(t)
+            | InlineType::SmallCaps(t)
+            | InlineType::Span(t)
+            | InlineType::Link(Link { title: t, .. }) => t.ends_with(c),
+            InlineType::Text(s) => s.ends_with(c),
+            _ => false,
+        }
     }
 }
 
