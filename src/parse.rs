@@ -890,16 +890,20 @@ mod tests {
     fn heading() {
         block!(block = "# Test");
         let block = block.parse().unwrap().unwrap();
-        let heading = block.kind.as_heading().unwrap();
-        assert_eq!(
-            heading,
-            &document::Heading {
-                title: " Test ".into(),
-                numbered: true,
-                toc: true,
-                level: 1,
-                ..Default::default()
-            }
+        let got = block.kind.as_heading().unwrap();
+        let expected = document::Heading {
+            title: " Test ".into(),
+            numbered: true,
+            toc: true,
+            ..document::Heading::new(1)
+        };
+        assert!(
+            got.eq(&expected),
+            r#"assertion failed: `(left == right)`
+  left: `{:#?}`,
+ right: `{:#?}`"#,
+            &*got,
+            &expected
         );
     }
 }

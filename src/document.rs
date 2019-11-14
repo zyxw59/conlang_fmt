@@ -119,7 +119,7 @@ impl Document {
     /// Get a mutable reference to the specified block as a heading.
     ///
     /// Panics if the specified block doesn't exist or isn't a heading.
-    fn get_mut_heading(&mut self, block_index: usize) -> &mut HeadingLike {
+    fn get_mut_heading(&mut self, block_index: usize) -> &mut dyn HeadingLike {
         self.blocks[block_index].kind.as_mut_heading().unwrap()
     }
 
@@ -306,7 +306,7 @@ impl<T: BlockType> UpdateParam for T {
     }
 }
 
-pub trait HeadingLike {
+pub trait HeadingLike: Debug {
     fn numbered(&self) -> bool;
     fn toc(&self) -> bool;
     fn level(&self) -> usize;
@@ -315,6 +315,16 @@ pub trait HeadingLike {
     fn number(&self) -> &[usize];
     fn push_number(&mut self, value: usize);
     fn title(&self) -> &Text;
+
+    #[cfg(test)]
+    fn eq(&self, other: &dyn HeadingLike) -> bool {
+        self.numbered() == other.numbered()
+            && self.toc() == other.toc()
+            && self.level() == other.level()
+            && self.children() == other.children()
+            && self.number() == other.number()
+            && self.title() == other.title()
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
