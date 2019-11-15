@@ -7,6 +7,7 @@ use std::ops::Deref;
 
 use failure::ResultExt;
 use htmlescape::encode_minimal_w;
+use itertools::Itertools;
 
 use crate::errors::{ErrorKind, Result as EResult};
 
@@ -38,14 +39,20 @@ pub struct Document {
     /// A list of indices into the `blocks` field corresponding to the top-level section headings
     /// of the document.
     sections: SectionList,
-    /// A list of indices into the `blocks` field corresponding to the tables of the document.
-    tables: Vec<usize>,
-    /// A list of indices into the `blocks` field corresponding to the glosses of the document.
-    glosses: Vec<usize>,
     /// A map from IDs to indices into the `blocks` field.
     ids: HashMap<String, usize>,
     /// A map of defined replacements.
     replacements: Replacements,
+    /// A list of indices into the `blocks` field corresponding to the tables.
+    tables: Vec<usize>,
+    /// A list of indices into the `blocks` field corresponding to the glosses.
+    glosses: Vec<usize>,
+    /// The last table number.
+    table_number: usize,
+    /// The last gloss number.
+    gloss_number: usize,
+    /// The first unused number for blocks without an ID.
+    noid_index: usize,
 }
 
 impl Document {
@@ -81,6 +88,9 @@ impl Document {
             }
             if heading.numbered() {
                 heading.push_number(self.get_section_list(curr).last_child_number + 1);
+                if block.common.id.is_empty() {
+                    block.common.id = format!("sec-{}", heading.number().iter().format("-"));
+                }
             }
             self.get_mut_section_list(curr)
                 .push(idx, heading.numbered());
@@ -88,19 +98,29 @@ impl Document {
         if let Some(replacements) = block.kind.as_mut_replacements() {
             self.replacements.update(replacements);
         }
-        if block.kind.is_table() {
+        if let Some(table) = block.kind.as_mut_table() {
+            if table.numbered {
+                self.table_number += 1;
+                table.number = self.table_number;
+            }
             self.tables.push(idx);
         }
-        if block.kind.is_gloss() {
+        if let Some(gloss) = block.kind.as_mut_gloss() {
+            if gloss.numbered {
+                self.gloss_number += 1;
+                gloss.number = self.gloss_number;
+            }
             self.glosses.push(idx);
         }
-        let id = block.common.id.clone();
-        if !id.is_empty() {
-            match self.ids.entry(id) {
-                Entry::Occupied(e) => return Err(ErrorKind::Id(e.key().clone()).into()),
-                Entry::Vacant(e) => e.insert(idx),
-            };
+        if block.common.id.is_empty() {
+            block.common.id = format!("__no-id-{}", self.noid_index);
+            self.noid_index += 1;
         }
+        let id = block.common.id.clone();
+        match self.ids.entry(id) {
+            Entry::Occupied(e) => return Err(ErrorKind::Id(e.key().clone()).into()),
+            Entry::Vacant(e) => e.insert(idx),
+        };
         self.blocks.push(block);
         Ok(())
     }
@@ -112,6 +132,11 @@ impl Document {
                 .context(ErrorKind::WriteIo(common.start_line))?;
         }
         Ok(())
+    }
+
+    /// Get a reference to the specified block.
+    fn get_block(&self, idx: usize) -> Option<&Block> {
+        self.blocks.get(idx)
     }
 
     /// Get a reference to the specified block as a heading.
@@ -150,6 +175,11 @@ impl Document {
         } else {
             &mut self.sections
         }
+    }
+
+    /// Gets a reference to the block with the specified ID.
+    fn get_id(&self, id: &str) -> Option<&Block> {
+        self.ids.get(id).map(|&idx| &self.blocks[idx])
     }
 }
 
@@ -279,6 +309,11 @@ pub trait BlockType: Debug {
         Ok(Some(param))
     }
 
+    /// Returns a `&dyn Referenceable` if the block can be referenced, otherwise returns `None`.
+    fn as_referenceable(&self) -> Option<&dyn Referenceable> {
+        None
+    }
+
     /// Returns a `&dyn HeadingLike` if the block is a heading, otherwise returns `None`.
     fn as_heading(&self) -> Option<&dyn HeadingLike> {
         None
@@ -299,14 +334,14 @@ pub trait BlockType: Debug {
         None
     }
 
-    /// Returns whether the block should be included in the list of tables.
-    fn is_table(&self) -> bool {
-        false
+    /// Returns a `&mut Table` if the block is a table, otherwise returns `None`.
+    fn as_mut_table(&mut self) -> Option<&mut Table> {
+        None
     }
 
-    /// Returns whether the block should be included in the list of glosses.
-    fn is_gloss(&self) -> bool {
-        false
+    /// Returns a `&mut Table` if the block is a table, otherwise returns `None`.
+    fn as_mut_gloss(&mut self) -> Option<&mut Gloss> {
+        None
     }
 }
 
@@ -314,6 +349,11 @@ impl<T: BlockType> UpdateParam for T {
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         BlockType::update_param(self, param)
     }
+}
+
+pub trait Referenceable {
+    /// Outputs the text of a reference to the block.
+    fn write_reference(&self, w: &mut dyn Write, document: &Document) -> IoResult<()>;
 }
 
 pub trait HeadingLike: Debug {
@@ -412,12 +452,28 @@ impl BlockType for Heading {
         })
     }
 
+    fn as_referenceable(&self) -> Option<&dyn Referenceable> {
+        Some(self)
+    }
+
     fn as_heading(&self) -> Option<&dyn HeadingLike> {
         Some(self)
     }
 
     fn as_mut_heading(&mut self) -> Option<&mut dyn HeadingLike> {
         Some(self)
+    }
+}
+
+impl Referenceable for Heading {
+    fn write_reference(&self, mut w: &mut dyn Write, document: &Document) -> IoResult<()> {
+        write!(w, "section ")?;
+        if self.numbered {
+            write_section_number(&mut w, &self.number)?;
+        } else {
+            self.title.write_inline(w, document)?;
+        }
+        Ok(())
     }
 }
 
@@ -570,7 +626,11 @@ impl Contents {
                     write!(w, "<li>")?;
                 }
                 if heading.toc() {
+                    write!(w, "<a href=\"#")?;
+                    encode_minimal_w(&document.get_block(e).unwrap().common.id, w)?;
+                    write!(w, "\">")?;
                     heading.title().write_inline(w, document)?;
+                    write!(w, "</a>")?;
                 }
                 self.write_sublist(w, level + 1, heading.children(), &document)?;
                 writeln!(w, "</li>")?;
@@ -719,6 +779,7 @@ impl ListItem {
 pub struct Table {
     pub title: Text,
     pub numbered: bool,
+    pub number: usize,
     pub rows: Vec<Row>,
     pub columns: Vec<Column>,
 }
@@ -741,6 +802,11 @@ impl BlockType for Table {
         write_attribute(&mut w, "class", &common.class)?;
         writeln!(w, ">")?;
         write!(w, "<caption>")?;
+        write!(w, r#"<span class="table-heading-prefix">Table"#)?;
+        if self.numbered {
+            write!(w, " {}", self.number)?;
+        }
+        write!(w, ":</span> ")?;
         self.title.write_inline(w, document)?;
         writeln!(w, "</caption>")?;
         // for recording when a cell is a continuation from an earlier row, to correctly count
@@ -790,6 +856,26 @@ impl BlockType for Table {
             },
         })
     }
+
+    fn as_mut_table(&mut self) -> Option<&mut Table> {
+        Some(self)
+    }
+
+    fn as_referenceable(&self) -> Option<&dyn Referenceable> {
+        Some(self)
+    }
+}
+
+impl Referenceable for Table {
+    fn write_reference(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
+        if self.numbered {
+            write!(w, "table {}", self.number)?;
+        } else {
+            write!(w, "table ")?;
+            self.title.write_inline(w, document)?;
+        }
+        Ok(())
+    }
 }
 
 impl Default for Table {
@@ -797,6 +883,7 @@ impl Default for Table {
         Table {
             title: Default::default(),
             numbered: true,
+            number: 0,
             rows: Default::default(),
             columns: Default::default(),
         }
@@ -969,6 +1056,7 @@ impl Default for Cell {
 pub struct Gloss {
     pub title: Text,
     pub numbered: bool,
+    pub number: usize,
     pub preamble: Vec<Text>,
     pub gloss: Vec<GlossLine>,
     pub postamble: Vec<Text>,
@@ -993,6 +1081,11 @@ impl BlockType for Gloss {
         encode_minimal_w(&common.class, &mut w)?;
         write!(w, r#"">"#)?;
         write!(w, r#"<p class="gloss-heading">"#)?;
+        write!(w, r#"<span class="gloss-heading-prefix">Gloss"#)?;
+        if self.numbered {
+            write!(w, " {}", self.number)?;
+        }
+        write!(w, ":</span> ")?;
         self.title.write_inline(w, document)?;
         writeln!(w, "</p>")?;
         for line in &self.preamble {
@@ -1058,6 +1151,26 @@ impl BlockType for Gloss {
             },
         })
     }
+
+    fn as_mut_gloss(&mut self) -> Option<&mut Gloss> {
+        Some(self)
+    }
+
+    fn as_referenceable(&self) -> Option<&dyn Referenceable> {
+        Some(self)
+    }
+}
+
+impl Referenceable for Gloss {
+    fn write_reference(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
+        if self.numbered {
+            write!(w, "gloss {}", self.number)?;
+        } else {
+            write!(w, "gloss ")?;
+            self.title.write_inline(w, document)?;
+        }
+        Ok(())
+    }
 }
 
 impl Default for Gloss {
@@ -1065,6 +1178,7 @@ impl Default for Gloss {
         Gloss {
             title: Default::default(),
             numbered: true,
+            number: 0,
             preamble: Default::default(),
             gloss: Default::default(),
             postamble: Default::default(),
@@ -1328,6 +1442,10 @@ impl InlineType {
             write!(w, r#"" "#)?;
             if let InlineType::Link(link) = self {
                 write_attribute(&mut w, "href", &link.url)?;
+            } else if let InlineType::Reference(id) = self {
+                write!(w, "href=\"#")?;
+                encode_minimal_w(id, &mut w)?;
+                write!(w, "\"")?;
             }
             write!(w, ">")?;
         }
@@ -1340,7 +1458,21 @@ impl InlineType {
             | InlineType::Span(t)
             | InlineType::Link(Link { title: t, .. }) => t.write_inline(w, &document)?,
             InlineType::Text(s) => write!(w, "{}", s)?,
-            InlineType::Reference(id) => unimplemented!(),
+            InlineType::Reference(id) => {
+                if let Some(block) = document.get_id(id) {
+                    if let Some(referenceable) = block.kind.as_referenceable() {
+                        referenceable.write_reference(w, document)?;
+                    } else {
+                        write!(w, "<span class=\"unreferenceable-block\">#")?;
+                        encode_minimal_w(id, &mut w)?;
+                        write!(w, "</span>")?;
+                    }
+                } else {
+                    write!(w, "<span class=\"undefined-reference\">#")?;
+                    encode_minimal_w(id, &mut w)?;
+                    write!(w, "</span>")?;
+                }
+            }
             InlineType::Replace(id) => match document.replacements.get(id) {
                 Some(t) => t.write_inline(w, &document)?,
                 None => {
@@ -1363,7 +1495,7 @@ impl InlineType {
             Strong(_) => Some("strong"),
             Italics(_) => Some("i"),
             Bold(_) => Some("b"),
-            Link(_) => Some("a"),
+            Link(_) | Reference(_) => Some("a"),
             Text(_) => None,
             _ => Some("span"),
         }
