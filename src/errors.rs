@@ -63,6 +63,8 @@ pub enum ErrorKind {
     Parameter(String),
     #[fail(display = "Duplicate ID {}", _0)]
     Id(String),
+    #[fail(display = "Duplicate replace directive {}", _0)]
+    Replace(String),
     #[fail(display = "Invalid UTF-8 in line {}", _0)]
     Unicode(usize),
     #[fail(display = "An IO error occurred while reading line {}", _0)]

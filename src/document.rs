@@ -44,6 +44,8 @@ pub struct Document {
     glosses: Vec<usize>,
     /// A map from IDs to indices into the `blocks` field.
     ids: HashMap<String, usize>,
+    /// A map of defined replacements.
+    replacements: Replacements,
 }
 
 impl Document {
@@ -82,6 +84,9 @@ impl Document {
             }
             self.get_mut_section_list(curr)
                 .push(idx, heading.numbered());
+        }
+        if let Some(replacements) = block.kind.as_mut_replacements() {
+            self.replacements.update(replacements);
         }
         if block.kind.is_table() {
             self.tables.push(idx);
@@ -281,6 +286,11 @@ pub trait BlockType: Debug {
 
     /// Returns a `&mut dyn HeadingLike` if the block is a heading, otherwise returns `None`.
     fn as_mut_heading(&mut self) -> Option<&mut dyn HeadingLike> {
+        None
+    }
+
+    /// Returns a `Replacements` if the block is a replacements block, otherwise returns `None`.
+    fn as_mut_replacements(&mut self) -> Option<&mut Replacements> {
         None
     }
 
@@ -1099,9 +1109,61 @@ impl GlossLineType {
         })
     }
 }
+
 impl Default for GlossLineType {
     fn default() -> GlossLineType {
         GlossLineType::Split
+    }
+}
+
+#[derive(Debug, Default, Eq, PartialEq)]
+pub struct Replacements {
+    pub replacements: HashMap<String, Text>,
+}
+
+impl Replacements {
+    pub fn new() -> Replacements {
+        Default::default()
+    }
+
+    /// Inserts the given key/value pair, returning an error if the key is already present.
+    pub fn insert(&mut self, key: String, value: Text) -> EResult<()> {
+        if self.replacements.contains_key(&key) {
+            Err(ErrorKind::Replace(key).into())
+        } else {
+            self.replacements.insert(key, value);
+            Ok(())
+        }
+    }
+
+    /// Updates `self` with keys from `other`, replacing duplicates.
+    fn update(&mut self, other: &mut Replacements) {
+        for (k, v) in other.drain() {
+            self.replacements.insert(k, v);
+        }
+    }
+
+    fn drain(&mut self) -> impl Iterator<Item = (String, Text)> + '_ {
+        self.replacements.drain()
+    }
+
+    /// Gets the given key.
+    fn get(&self, key: &str) -> Option<&Text> {
+        self.replacements.get(key)
+    }
+}
+
+impl BlockType for Replacements {
+    fn write(&self, _: &mut dyn Write, _: &BlockCommon, _: &Document) -> IoResult<()> {
+        Ok(())
+    }
+
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+        Ok(Some(param))
+    }
+
+    fn as_mut_replacements(&mut self) -> Option<&mut Replacements> {
+        Some(self)
     }
 }
 
@@ -1279,7 +1341,14 @@ impl InlineType {
             | InlineType::Link(Link { title: t, .. }) => t.write_inline(w, &document)?,
             InlineType::Text(s) => write!(w, "{}", s)?,
             InlineType::Reference(id) => unimplemented!(),
-            InlineType::Replace(id) => unimplemented!(),
+            InlineType::Replace(id) => match document.replacements.get(id) {
+                Some(t) => t.write_inline(w, &document)?,
+                None => {
+                    write!(w, r#"<span class="undefined-replace">:"#)?;
+                    encode_minimal_w(id, &mut w)?;
+                    write!(w, ":</span>")?;
+                }
+            },
         }
         if let Some(tag) = self.tag() {
             write!(w, "</{}>", tag)?;

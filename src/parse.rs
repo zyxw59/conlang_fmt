@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use failure::Fail;
+use failure::{Fail, ResultExt};
 use itertools::Itertools;
 
 use crate::document::{self, Parameter, UpdateParam};
@@ -90,6 +90,7 @@ impl<'a> Block<'a> {
                 "list" => self.parse_list()?,
                 "table" => self.parse_table()?,
                 "gloss" => self.parse_gloss()?,
+                "replace" => self.parse_replace_block()?,
                 // any other directive is an inline directive; rewind and parse the block as a
                 // paragraph
                 _ => self.parse_paragraph(start)?,
@@ -270,6 +271,25 @@ impl<'a> Block<'a> {
         }
         Ok(document::Block {
             kind: Box::new(gloss),
+            common,
+        })
+    }
+
+    fn parse_replace_block(&mut self) -> EResult<document::Block> {
+        let mut replacements = document::Replacements::new();
+        let mut common = document::BlockCommon::new(self.start.unwrap());
+        update_multiple!(self, common);
+        self.skip_whitespace();
+        while let Some(':') = self.next() {
+            let directive = self.directive()?;
+            let mut text = document::Text::new();
+            self.text_until_char(&mut text, '\n')?;
+            replacements
+                .insert(directive, text)
+                .context(ErrorKind::Block(self.start.unwrap()))?;
+        }
+        Ok(document::Block {
+            kind: Box::new(replacements),
             common,
         })
     }

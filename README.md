@@ -197,6 +197,10 @@ In the text, a replacement is denoted by the directive declared in the
 `:replace:` block.
 Text replacements do not take any parameters other than the `class` parameter.
 
+> Replacements can only be defined once in a single `:replace:` block, but can
+> be redefined in another `:replace:` block, to allow the same replacement to
+> have different expansions in different places.
+
 #### Cross references (`:ref:`)
 
 ##### Parameters
