@@ -1,3 +1,5 @@
+#[macro_use]
+mod html;
 mod blocks;
 mod document;
 mod errors;

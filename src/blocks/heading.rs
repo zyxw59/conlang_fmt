@@ -2,21 +2,18 @@ use std::fmt::Debug;
 use std::io::{Result as IoResult, Write};
 use std::ops::Deref;
 
-use htmlescape::encode_minimal_w;
-
 use crate::blocks::{BlockCommon, BlockType, Parameter};
-use crate::document::{write_attribute, Document};
+use crate::document::Document;
 use crate::errors::Result as EResult;
+use crate::html;
 use crate::text::{Referenceable, Text, EMPTY_TEXT};
 
 type OResult<T> = EResult<Option<T>>;
 
 /// Writes a section number recursively.
-fn write_section_number(w: &mut impl Write, number: &[usize]) -> IoResult<()> {
+fn write_section_number(w: &mut dyn Write, number: &[usize]) -> IoResult<()> {
     if let Some((last, rest)) = number.split_last() {
-        write!(w, "<span ")?;
-        write_attribute(w, "class", "secnum")?;
-        write!(w, ">")?;
+        write!(w, "<span class=\"secnum\">")?;
         write_section_number(w, rest)?;
         write!(w, "{}.</span>", last)?;
     }
@@ -77,26 +74,20 @@ impl Heading {
 }
 
 impl BlockType for Heading {
-    fn write(
-        &self,
-        mut w: &mut dyn Write,
-        common: &BlockCommon,
-        document: &Document,
-    ) -> IoResult<()> {
+    fn write(&self, w: &mut dyn Write, common: &BlockCommon, document: &Document) -> IoResult<()> {
         // start tag
         write!(w, "<{} ", self.tag())?;
-        write_attribute(&mut w, "id", &common.id)?;
-        write!(w, r#"class=""#)?;
-        encode_minimal_w(&common.class, &mut w)?;
+        write!(w, "id=\"{}\" ", html::Encoder(&common.id))?;
+        write!(w, "class=\"{} ", html::Encoder(&common.class))?;
         if self.level > 6 {
             // we're just using a `p` tag, so the heading level must be specified as a class
-            write!(w, r#" h{}">"#, self.level)?;
+            write!(w, " h{}\">", self.level)?;
         } else {
             // we're using a proper heading tag, so no need to specify the heading level as a class
-            write!(w, r#"">"#)?;
+            write!(w, "\">")?;
         }
         if self.numbered {
-            write_section_number(&mut w, &self.number)?;
+            write_section_number(w, &self.number)?;
         }
         self.title.write_inline(w, &document)?;
         writeln!(w, "</{}>\n", self.tag())

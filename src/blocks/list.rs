@@ -1,8 +1,9 @@
 use std::io::{Result as IoResult, Write};
 
 use crate::blocks::{BlockCommon, BlockType, Parameter};
-use crate::document::{write_attribute, Document};
+use crate::document::Document;
 use crate::errors::Result as EResult;
+use crate::html;
 use crate::text::Text;
 
 type OResult<T> = EResult<Option<T>>;
@@ -27,7 +28,7 @@ impl List {
     }
 
     fn write_list(
-        w: &mut impl Write,
+        w: &mut dyn Write,
         items: &[ListItem],
         ordered: bool,
         document: &Document,
@@ -40,17 +41,11 @@ impl List {
 }
 
 impl BlockType for List {
-    fn write(
-        &self,
-        mut w: &mut dyn Write,
-        common: &BlockCommon,
-        document: &Document,
-    ) -> IoResult<()> {
+    fn write(&self, w: &mut dyn Write, common: &BlockCommon, document: &Document) -> IoResult<()> {
         write!(w, "<{} ", List::tag(self.ordered))?;
-        write_attribute(&mut w, "id", &common.id)?;
-        write_attribute(&mut w, "class", &common.class)?;
-        writeln!(w, ">")?;
-        List::write_list(&mut w, &self.items, self.ordered, document)?;
+        write!(w, "id=\"{}\" ", html::Encoder(&common.id))?;
+        write!(w, "class=\"{}\">", html::Encoder(&common.class))?;
+        List::write_list(w, &self.items, self.ordered, document)?;
         write!(w, "</{}>\n", List::tag(self.ordered))
     }
 
@@ -84,7 +79,7 @@ impl ListItem {
         Default::default()
     }
 
-    fn write(&self, w: &mut impl Write, ordered: bool, document: &Document) -> IoResult<()> {
+    fn write(&self, w: &mut dyn Write, ordered: bool, document: &Document) -> IoResult<()> {
         write!(w, "<li>")?;
         self.text.write_inline(w, document)?;
         if !self.sublist.is_empty() {

@@ -2,10 +2,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::default::Default;
 use std::fmt::Debug;
-use std::io::{Result as IoResult, Write};
+use std::io::Write;
 
 use failure::ResultExt;
-use htmlescape::encode_minimal_w;
 use itertools::Itertools;
 
 use crate::blocks::{
@@ -15,13 +14,6 @@ use crate::blocks::{
 };
 use crate::errors::{ErrorKind, Result as EResult};
 use crate::text::Text;
-
-/// Writes an attribute/value pair, escaping the value as necessary.
-pub fn write_attribute(w: &mut impl Write, attr: &str, value: &str) -> IoResult<()> {
-    write!(w, r#"{}=""#, attr)?;
-    encode_minimal_w(value, w)?;
-    write!(w, r#"" "#)
-}
 
 #[derive(Debug, Default)]
 pub struct Document {

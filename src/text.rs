@@ -1,10 +1,9 @@
 use std::io::{Result as IoResult, Write};
 
-use htmlescape::encode_minimal_w;
-
 use crate::blocks::{BlockCommon, BlockType, Parameter, UpdateParam};
-use crate::document::{write_attribute, Document};
+use crate::document::Document;
 use crate::errors::Result as EResult;
+use crate::html;
 
 type OResult<T> = EResult<Option<T>>;
 
@@ -161,23 +160,19 @@ impl InlineType {
         InlineType::Reference(Default::default())
     }
 
-    fn write(
-        &self,
-        mut w: &mut dyn Write,
-        common: &InlineCommon,
-        document: &Document,
-    ) -> IoResult<()> {
+    fn write(&self, w: &mut dyn Write, common: &InlineCommon, document: &Document) -> IoResult<()> {
         if let Some(tag) = self.tag() {
             write!(w, "<{} ", tag)?;
-            write!(w, r#"class="{} "#, self.class())?;
-            encode_minimal_w(&common.class, &mut w)?;
-            write!(w, r#"" "#)?;
+            write!(
+                w,
+                "class=\"{} {}\"",
+                html::Encoder(self.class()),
+                html::Encoder(&common.class)
+            )?;
             if let InlineType::Link(link) = self {
-                write_attribute(&mut w, "href", &link.url)?;
+                write!(w, " href=\"{}\"", html::Encoder(&link.url))?;
             } else if let InlineType::Reference(id) = self {
-                write!(w, "href=\"#")?;
-                encode_minimal_w(id, &mut w)?;
-                write!(w, "\"")?;
+                write!(w, " href=\"#{}\"", html::Encoder(id))?;
             }
             write!(w, ">")?;
         }
@@ -189,28 +184,34 @@ impl InlineType {
             | InlineType::SmallCaps(t)
             | InlineType::Span(t)
             | InlineType::Link(Link { title: t, .. }) => t.write_inline(w, &document)?,
-            InlineType::Text(s) => write!(w, "{}", s)?,
+            InlineType::Text(s) => write!(w, "{}", html::Encoder(s))?,
             InlineType::Reference(id) => {
                 if let Some(block) = document.get_id(id) {
                     if let Some(referenceable) = block.kind.as_referenceable() {
                         referenceable.write_reference(w, document)?;
                     } else {
-                        write!(w, "<span class=\"unreferenceable-block\">#")?;
-                        encode_minimal_w(id, &mut w)?;
-                        write!(w, "</span>")?;
+                        write!(
+                            w,
+                            "<span class=\"unreferenceable-block\">#{}</span>",
+                            html::Encoder(id)
+                        )?;
                     }
                 } else {
-                    write!(w, "<span class=\"undefined-reference\">#")?;
-                    encode_minimal_w(id, &mut w)?;
-                    write!(w, "</span>")?;
+                    write!(
+                        w,
+                        "<span class=\"undefined-reference\">#{}</span>",
+                        html::Encoder(id)
+                    )?;
                 }
             }
             InlineType::Replace(key) => match document.get_replacement(key) {
                 Some(t) => t.write_inline(w, &document)?,
                 None => {
-                    write!(w, r#"<span class="undefined-replace">:"#)?;
-                    encode_minimal_w(key, &mut w)?;
-                    write!(w, ":</span>")?;
+                    write!(
+                        w,
+                        "<span class=\"undefined-replace\">:{}:</span>",
+                        html::Encoder(key)
+                    )?;
                 }
             },
         }

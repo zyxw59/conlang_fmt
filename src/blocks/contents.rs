@@ -1,11 +1,11 @@
 use std::io::{Result as IoResult, Write};
 
 use failure::ResultExt;
-use htmlescape::encode_minimal_w;
 
 use crate::blocks::{BlockCommon, BlockType, Parameter};
-use crate::document::{write_attribute, Document};
+use crate::document::Document;
 use crate::errors::{ErrorKind, Result as EResult};
+use crate::html;
 use crate::text::Text;
 
 type OResult<T> = EResult<Option<T>>;
@@ -23,7 +23,7 @@ impl Contents {
 
     fn write_sublist(
         &self,
-        w: &mut impl Write,
+        w: &mut dyn Write,
         level: usize,
         list: &[usize],
         document: &Document,
@@ -49,9 +49,11 @@ impl Contents {
                     write!(w, "<li>")?;
                 }
                 if heading.toc() {
-                    write!(w, "<a href=\"#")?;
-                    encode_minimal_w(&document.get_block(e).unwrap().common.id, w)?;
-                    write!(w, "\">")?;
+                    write!(
+                        w,
+                        "<a href=\"#{}\">",
+                        &document.get_block(e).unwrap().common.id
+                    )?;
                     heading.title().write_inline(w, document)?;
                     write!(w, "</a>")?;
                 }
@@ -65,24 +67,14 @@ impl Contents {
 }
 
 impl BlockType for Contents {
-    fn write(
-        &self,
-        mut w: &mut dyn Write,
-        common: &BlockCommon,
-        document: &Document,
-    ) -> IoResult<()> {
+    fn write(&self, w: &mut dyn Write, common: &BlockCommon, document: &Document) -> IoResult<()> {
         write!(w, "<div ")?;
-        write_attribute(&mut w, "id", &common.id)?;
-        write!(w, r#"class=""#)?;
-        encode_minimal_w(&common.class, &mut w)?;
-        write!(w, " toc")?;
-        write!(w, r#"">"#)?;
-        write!(w, "<p ")?;
-        write_attribute(&mut w, "class", "toc-heading")?;
-        write!(w, ">")?;
+        write!(w, "id=\"{}\" ", html::Encoder(&common.id))?;
+        write!(w, "class=\"{} toc\">", html::Encoder(&common.class))?;
+        write!(w, "<p class=\"toc-heading\">")?;
         self.title.write_inline(w, &document)?;
         writeln!(w, "</p>")?;
-        self.write_sublist(&mut w, 1, document.get_section_list(None), &document)?;
+        self.write_sublist(w, 1, document.get_section_list(None), &document)?;
         writeln!(w, "</div>\n")
     }
 

@@ -1,10 +1,9 @@
 use std::io::{Result as IoResult, Write};
 
-use htmlescape::encode_minimal_w;
-
 use crate::blocks::{BlockCommon, BlockType, Parameter};
-use crate::document::{write_attribute, Document};
+use crate::document::Document;
 use crate::errors::Result as EResult;
+use crate::html;
 use crate::text::{Referenceable, Text};
 
 type OResult<T> = EResult<Option<T>>;
@@ -26,19 +25,12 @@ impl Gloss {
 }
 
 impl BlockType for Gloss {
-    fn write(
-        &self,
-        mut w: &mut dyn Write,
-        common: &BlockCommon,
-        document: &Document,
-    ) -> IoResult<()> {
+    fn write(&self, w: &mut dyn Write, common: &BlockCommon, document: &Document) -> IoResult<()> {
         write!(w, "<div ")?;
-        write_attribute(&mut w, "id", &common.id)?;
-        write!(w, r#"class="gloss "#)?;
-        encode_minimal_w(&common.class, &mut w)?;
-        write!(w, r#"">"#)?;
-        write!(w, r#"<p class="gloss-heading">"#)?;
-        write!(w, r#"<span class="gloss-heading-prefix">Gloss"#)?;
+        write!(w, "id=\"{}\" ", html::Encoder(&common.id))?;
+        write!(w, "class=\"gloss {}\">", html::Encoder(&common.class))?;
+        write!(w, "<p class=\"gloss-heading\">")?;
+        write!(w, "<span class=\"gloss-heading-prefix\">Gloss")?;
         if self.numbered {
             write!(w, " {}", self.number)?;
         }
@@ -64,17 +56,13 @@ impl BlockType for Gloss {
                     write!(w, " ")?;
                 }
                 write!(w, "<dl>")?;
-                write!(w, "<dt ")?;
-                write_attribute(&mut w, "class", &self.gloss[0].class)?;
-                write!(w, ">")?;
+                write!(w, "<dt class=\"{}\">", html::Encoder(&self.gloss[0].class))?;
                 if let Some(text) = head_word {
                     text.write_inline(w, document)?;
                 }
                 write!(w, "</dt>")?;
                 for line in &self.gloss[1..] {
-                    write!(w, "<dd ")?;
-                    write_attribute(&mut w, "class", &line.class)?;
-                    write!(w, ">")?;
+                    write!(w, "<dd class=\"{}\">", html::Encoder(&line.class))?;
                     if let Some(text) = line.words.get(i) {
                         text.write_inline(w, document)?;
                     }

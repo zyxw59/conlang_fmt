@@ -1,11 +1,11 @@
 use std::io::{Result as IoResult, Write};
 
 use failure::ResultExt;
-use htmlescape::encode_minimal_w;
 
 use crate::blocks::{BlockCommon, BlockType, Parameter, UpdateParam};
-use crate::document::{write_attribute, Document};
+use crate::document::Document;
 use crate::errors::{ErrorKind, Result as EResult};
+use crate::html;
 use crate::text::{Referenceable, Text};
 
 type OResult<T> = EResult<Option<T>>;
@@ -33,9 +33,8 @@ impl BlockType for Table {
         document: &Document,
     ) -> IoResult<()> {
         write!(w, "<table ")?;
-        write_attribute(&mut w, "id", &common.id)?;
-        write_attribute(&mut w, "class", &common.class)?;
-        writeln!(w, ">")?;
+        write!(w, "id=\"{}\" ", html::Encoder(&common.id))?;
+        write!(w, "class=\"{}\">", html::Encoder(&common.class))?;
         write!(w, "<caption>")?;
         write!(w, r#"<span class="table-heading-prefix">Table"#)?;
         if self.numbered {
@@ -48,9 +47,7 @@ impl BlockType for Table {
         // columns
         let mut continuation_cells = Vec::<usize>::with_capacity(self.columns.len());
         for row in &self.rows {
-            write!(w, "<tr ")?;
-            write_attribute(&mut w, "class", &row.class)?;
-            write!(w, ">")?;
+            write!(w, "<tr class=\"{}\">", html::Encoder(&row.class))?;
             let mut col = 0;
             for cell in &row.cells {
                 // increment col until we get to a free column
@@ -213,31 +210,29 @@ impl Cell {
         if header_row {
             write!(w, "<th ")?;
             if self.cols > 1 {
-                write_attribute(w, "scope", "colgroup")?;
+                write!(w, "scope=\"colgroup\" ")?;
             } else {
-                write_attribute(w, "scope", "col")?;
+                write!(w, "scope=\"col\" ")?;
             }
         } else if header_col {
             write!(w, "<th ")?;
             if self.rows > 1 {
-                write_attribute(w, "scope", "rowgroup")?;
+                write!(w, "scope=\"rowgroup\" ")?;
             } else {
-                write_attribute(w, "scope", "row")?;
+                write!(w, "scope=\"row\" ")?;
             }
         } else {
             write!(w, "<td ")?;
         }
         if self.cols > 1 {
-            write_attribute(w, "colspan", &format!("{}", self.cols))?;
+            write!(w, "colspan=\"{}\" ", self.cols)?;
         }
         if self.rows > 1 {
-            write_attribute(w, "rowspan", &format!("{}", self.rows))?;
+            write!(w, "rowspan=\"{}\" ", self.rows)?;
         }
-        write!(w, r#"class=""#)?;
-        encode_minimal_w(&self.class, w)?;
+        write!(w, "class=\"{}", html::Encoder(&self.class))?;
         if let Some(col) = col {
-            write!(w, " ")?;
-            encode_minimal_w(&col.class, w)?;
+            write!(w, " {}", html::Encoder(&col.class))?;
         }
         write!(w, r#"">"#)?;
         self.text.write_inline(w, document)?;
