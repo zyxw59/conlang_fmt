@@ -9,9 +9,6 @@ expect it to do everything.
 
 ## Syntax
 
-> Since no code has been written yet, this section will define the desired
-> features and syntax for the program.
-
 ### Parameters
 
 Many syntax elements can take optional parameters, which are denoted by a
