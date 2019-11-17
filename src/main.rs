@@ -1,7 +1,9 @@
+mod blocks;
 mod document;
 mod errors;
 mod input;
 mod parse;
+mod text;
 
 use failure::Fail;
 use std::io;

@@ -3,8 +3,9 @@ use std::ops::Deref;
 use failure::{Fail, ResultExt};
 use itertools::Itertools;
 
-use crate::document::{self, Parameter, UpdateParam};
+use crate::blocks::{self, Parameter, UpdateParam};
 use crate::errors::{EndOfBlockKind, ErrorKind, Result as EResult};
+use crate::text;
 
 type OResult<T> = EResult<Option<T>>;
 
@@ -78,7 +79,7 @@ impl<'a> Block<'a> {
     }
 
     /// Parses the block.
-    pub fn parse(&mut self) -> OResult<document::Block> {
+    pub fn parse(&mut self) -> OResult<blocks::Block> {
         // skip leading whitespace
         self.skip_whitespace();
         // save the position of the first non-whitespace character; if we need to rewind, this is
@@ -101,38 +102,38 @@ impl<'a> Block<'a> {
         }))
     }
 
-    fn parse_toc(&mut self) -> EResult<document::Block> {
-        let mut toc = document::Contents::new();
-        let mut common = document::BlockCommon::new(self.start.unwrap());
+    fn parse_toc(&mut self) -> EResult<blocks::Block> {
+        let mut toc = blocks::contents::Contents::new();
+        let mut common = blocks::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, toc, common);
         self.text_rest(&mut toc.title)?;
-        Ok(document::Block {
+        Ok(blocks::Block {
             kind: Box::new(toc),
             common,
         })
     }
 
-    fn parse_list(&mut self) -> EResult<document::Block> {
-        let mut list = document::List::new();
-        let mut common = document::BlockCommon::new(self.start.unwrap());
+    fn parse_list(&mut self) -> EResult<blocks::Block> {
+        let mut list = blocks::list::List::new();
+        let mut common = blocks::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, list, common);
         while self.idx < self.len() {
             let indent = self.skip_whitespace_virtual() - self.idx;
             self.idx += indent + 2;
-            let mut item = document::ListItem::new();
+            let mut item = blocks::list::ListItem::new();
             self.text_until_hard_line(&mut item.text)?;
             self.list_tree(indent, &mut item.sublist)?;
             list.items.push(item);
         }
-        Ok(document::Block {
+        Ok(blocks::Block {
             kind: Box::new(list),
             common,
         })
     }
 
-    fn parse_table(&mut self) -> EResult<document::Block> {
-        let mut table = document::Table::new();
-        let mut common = document::BlockCommon::new(self.start.unwrap());
+    fn parse_table(&mut self) -> EResult<blocks::Block> {
+        let mut table = blocks::table::Table::new();
+        let mut common = blocks::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, table, common);
         self.text_until_char(&mut table.title, '\n')?;
         // put the newline back on the stack, since it's needed for `match_hard_line`
@@ -142,7 +143,7 @@ impl<'a> Block<'a> {
             match c {
                 // new cell
                 '|' => {
-                    let mut col = document::Column::new();
+                    let mut col = blocks::table::Column::new();
                     update_multiple!(self, col);
                     table.columns.push(col);
                 }
@@ -164,14 +165,14 @@ impl<'a> Block<'a> {
             self.skip_whitespace();
             // skip until after the double colon
             self.idx += 2;
-            let mut row = document::Row::new();
+            let mut row = blocks::table::Row::new();
             update_multiple!(self, row);
             // match the cells
             while let Some(c) = self.next() {
                 match c {
                     // new cell
                     '|' => {
-                        let mut cell = document::Cell::new();
+                        let mut cell = blocks::table::Cell::new();
                         update_multiple!(self, cell);
                         self.text_until(&mut cell.text, |slf, c| {
                             c == '|' || slf.match_hard_line(c)
@@ -198,15 +199,15 @@ impl<'a> Block<'a> {
                 table.rows.push(row);
             }
         }
-        Ok(document::Block {
+        Ok(blocks::Block {
             kind: Box::new(table),
             common,
         })
     }
 
-    fn parse_gloss(&mut self) -> EResult<document::Block> {
-        let mut gloss = document::Gloss::new();
-        let mut common = document::BlockCommon::new(self.start.unwrap());
+    fn parse_gloss(&mut self) -> EResult<blocks::Block> {
+        let mut gloss = blocks::gloss::Gloss::new();
+        let mut common = blocks::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, gloss, common);
         self.text_until_hard_line(&mut gloss.title)?;
         // now we've matched a hard line; time to start constructing the lines of the
@@ -216,11 +217,11 @@ impl<'a> Block<'a> {
             // skip until after the double colon
             self.idx += 2;
             let mut class = String::new();
-            let mut kind = document::GlossLineType::Split;
+            let mut kind = blocks::gloss::GlossLineType::Split;
             update_multiple!(self, kind, class);
             // check whether it's a nosplit:
             match kind {
-                document::GlossLineType::NoSplit => {
+                blocks::gloss::GlossLineType::NoSplit => {
                     let mut line = Default::default();
                     // add the rest of the line
                     self.text_until_hard_line(&mut line)?;
@@ -236,7 +237,7 @@ impl<'a> Block<'a> {
                         gloss.postamble.push(line);
                     }
                 }
-                document::GlossLineType::Split => {
+                blocks::gloss::GlossLineType::Split => {
                     // check if we've already entered the postamble; a gloss line here
                     // is an error
                     if !gloss.postamble.is_empty() {
@@ -244,7 +245,7 @@ impl<'a> Block<'a> {
                             .context(ErrorKind::Block(self.start.unwrap()))
                             .into());
                     }
-                    let mut line = document::GlossLine::new();
+                    let mut line = blocks::gloss::GlossLine::new();
                     line.class = class;
                     while let Some(c) = self.next() {
                         match c {
@@ -269,32 +270,32 @@ impl<'a> Block<'a> {
                 }
             }
         }
-        Ok(document::Block {
+        Ok(blocks::Block {
             kind: Box::new(gloss),
             common,
         })
     }
 
-    fn parse_replace_block(&mut self) -> EResult<document::Block> {
-        let mut replacements = document::Replacements::new();
-        let mut common = document::BlockCommon::new(self.start.unwrap());
+    fn parse_replace_block(&mut self) -> EResult<blocks::Block> {
+        let mut replacements = blocks::replacements::Replacements::new();
+        let mut common = blocks::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, common);
         self.skip_whitespace();
         while let Some(':') = self.next() {
             let directive = self.directive()?;
-            let mut text = document::Text::new();
+            let mut text = text::Text::new();
             self.text_until_char(&mut text, '\n')?;
             replacements
                 .insert(directive, text)
                 .context(ErrorKind::Block(self.start.unwrap()))?;
         }
-        Ok(document::Block {
+        Ok(blocks::Block {
             kind: Box::new(replacements),
             common,
         })
     }
 
-    fn parse_heading(&mut self, start: usize) -> EResult<document::Block> {
+    fn parse_heading(&mut self, start: usize) -> EResult<blocks::Block> {
         // count the `#`s
         while let Some('#') = self.next() {}
         // this is the number of `#`s. Subtract 1 because we're now at the char *after* the
@@ -302,22 +303,22 @@ impl<'a> Block<'a> {
         let level = self.idx - start - 1;
         // then rewind one character, we don't want to eat the character _after_ the `#`s.
         self.idx -= 1;
-        let mut heading = document::Heading::new(level);
-        let mut common = document::BlockCommon::new(self.start.unwrap());
+        let mut heading = blocks::heading::Heading::new(level);
+        let mut common = blocks::BlockCommon::new(self.start.unwrap());
         update_multiple!(self, heading, common);
         self.text_rest(&mut heading.title)?;
-        Ok(document::Block {
+        Ok(blocks::Block {
             kind: Box::new(heading),
             common,
         })
     }
 
-    fn parse_paragraph(&mut self, start: usize) -> EResult<document::Block> {
+    fn parse_paragraph(&mut self, start: usize) -> EResult<blocks::Block> {
         self.idx = start;
-        let mut text = document::Text::new();
-        let common = document::BlockCommon::new(self.start.unwrap());
+        let mut text = text::Text::new();
+        let common = blocks::BlockCommon::new(self.start.unwrap());
         self.text_rest(&mut text)?;
-        Ok(document::Block {
+        Ok(blocks::Block {
             kind: Box::new(text),
             common,
         })
@@ -327,7 +328,7 @@ impl<'a> Block<'a> {
     fn list_tree(
         &mut self,
         last_indent: usize,
-        parent: &mut Vec<document::ListItem>,
+        parent: &mut Vec<blocks::list::ListItem>,
     ) -> EResult<()> {
         loop {
             let indent = self.skip_whitespace_virtual() - self.idx;
@@ -335,7 +336,7 @@ impl<'a> Block<'a> {
                 return Ok(());
             }
             self.idx += indent + 2;
-            let mut item = document::ListItem::new();
+            let mut item = blocks::list::ListItem::new();
             self.text_until_hard_line(&mut item.text)?;
             self.list_tree(indent, &mut item.sublist)?;
             parent.push(item);
@@ -523,23 +524,23 @@ impl<'a> Block<'a> {
         }
     }
 
-    /// Appends elements to the given `document::Text` object up until the end of the block.
-    fn text_rest(&mut self, text: &mut document::Text) -> EResult<()> {
+    /// Appends elements to the given `text::Text` object up until the end of the block.
+    fn text_rest(&mut self, text: &mut text::Text) -> EResult<()> {
         // never break
         self.text_until(text, |_, _| false)
     }
 
-    /// Appends elements to the given `document::Text` object up until the next occurance of the
+    /// Appends elements to the given `text::Text` object up until the next occurance of the
     /// specified `char` not contained in another element, or until the end of the block.
-    fn text_until_char(&mut self, text: &mut document::Text, until: char) -> EResult<()> {
+    fn text_until_char(&mut self, text: &mut text::Text, until: char) -> EResult<()> {
         self.text_until(text, |_, c| c == until)
     }
 
-    /// Appends elements to the given `document::Text` object up until the next occurrance of `::`
+    /// Appends elements to the given `text::Text` object up until the next occurrance of `::`
     /// at the start of a line (ignoring whitespace), not contained in another element, or until
     /// the end of the block. The iterator will point at the first character of the line, which is
     /// either whitespace or the first colon.
-    fn text_until_hard_line(&mut self, text: &mut document::Text) -> EResult<()> {
+    fn text_until_hard_line(&mut self, text: &mut text::Text) -> EResult<()> {
         self.text_until(text, Self::match_hard_line)
     }
 
@@ -561,11 +562,11 @@ impl<'a> Block<'a> {
             }
     }
 
-    /// Appends elements to the given `document::Text` object up until the character matching the
+    /// Appends elements to the given `text::Text` object up until the character matching the
     /// specified predicate not contained in another element, or until the end of the block.
     fn text_until(
         &mut self,
-        text: &mut document::Text,
+        text: &mut text::Text,
         predicate: impl Fn(&Self, char) -> bool,
     ) -> EResult<()> {
         let mut buffer = String::new();
@@ -583,11 +584,11 @@ impl<'a> Block<'a> {
                     push_and_renew!(buffer: String::new(), text);
                     text.push(match self.directive()?.as_ref() {
                         // cross reference
-                        "ref" => self.simple_inline(document::InlineType::reference())?,
+                        "ref" => self.simple_inline(text::InlineType::reference())?,
                         // link
-                        "link" => self.simple_inline(document::InlineType::link())?,
+                        "link" => self.simple_inline(text::InlineType::link())?,
                         // replacement
-                        repl => self.simple_inline(document::InlineType::Replace(repl.into()))?,
+                        repl => self.simple_inline(text::InlineType::Replace(repl.into()))?,
                     });
                 }
                 // emphasis (semantic)
@@ -595,8 +596,8 @@ impl<'a> Block<'a> {
                     push_and_renew!(buffer: String::new(), text);
                     text.push(self.formatting_inline(
                         '*',
-                        document::InlineType::Emphasis,
-                        document::InlineType::Strong,
+                        text::InlineType::Emphasis,
+                        text::InlineType::Strong,
                     )?);
                 }
                 // italics/bold (non-semantic)
@@ -604,31 +605,31 @@ impl<'a> Block<'a> {
                     push_and_renew!(buffer: String::new(), text);
                     text.push(self.formatting_inline(
                         '_',
-                        document::InlineType::Italics,
-                        document::InlineType::Bold,
+                        text::InlineType::Italics,
+                        text::InlineType::Bold,
                     )?);
                 }
                 // small caps
                 '^' => {
                     push_and_renew!(buffer: String::new(), text);
                     // rewind
-                    let mut inner = document::Text::new();
+                    let mut inner = text::Text::new();
                     self.text_until_char(&mut inner, '^')?;
-                    let kind = document::InlineType::SmallCaps(inner);
+                    let kind = text::InlineType::SmallCaps(inner);
                     text.push(self.simple_inline(kind)?);
                 }
                 // generic `span`
                 '`' => {
                     push_and_renew!(buffer: String::new(), text);
-                    let mut inner = document::Text::new();
+                    let mut inner = text::Text::new();
                     self.text_until_char(&mut inner, '`')?;
-                    let kind = document::InlineType::Span(inner);
-                    let mut common = document::InlineCommon::new();
+                    let kind = text::InlineType::Span(inner);
+                    let mut common = text::InlineCommon::new();
                     // defaults to a class of "conlang"
                     common.class = "conlang".into();
                     // we don't need to update `span`, because it has no parameters of its own
                     update_multiple!(self, common);
-                    text.push(document::Inline { kind, common });
+                    text.push(text::Inline { kind, common });
                 }
                 // escaped character
                 '\\' => buffer.push(self.expect_escaped()?),
@@ -647,22 +648,22 @@ impl<'a> Block<'a> {
         Ok(())
     }
 
-    fn simple_inline(&mut self, mut kind: document::InlineType) -> EResult<document::Inline> {
-        let mut common = document::InlineCommon::new();
+    fn simple_inline(&mut self, mut kind: text::InlineType) -> EResult<text::Inline> {
+        let mut common = text::InlineCommon::new();
         update_multiple!(self, kind, common);
-        Ok(document::Inline { kind, common })
+        Ok(text::Inline { kind, common })
     }
 
     fn formatting_inline(
         &mut self,
         delim: char,
-        single: impl FnOnce(document::Text) -> document::InlineType,
-        double: impl FnOnce(document::Text) -> document::InlineType,
-    ) -> EResult<document::Inline> {
+        single: impl FnOnce(text::Text) -> text::InlineType,
+        double: impl FnOnce(text::Text) -> text::InlineType,
+    ) -> EResult<text::Inline> {
         let kind = match self.expect(delim)? {
             // double
             c if c == delim => {
-                let mut text = document::Text::new();
+                let mut text = text::Text::new();
                 self.text_until_char(&mut text, delim)?;
                 self.expect_exact(delim)?;
                 double(text)
@@ -671,7 +672,7 @@ impl<'a> Block<'a> {
             _ => {
                 // rewind
                 self.idx -= 1;
-                let mut text = document::Text::new();
+                let mut text = text::Text::new();
                 self.text_until_char(&mut text, delim)?;
                 single(text)
             }
@@ -851,14 +852,14 @@ mod tests {
 
     macro_rules! text {
         ($($($type:ident)? ($text:tt)),*) => {
-            $crate::document::Text(vec![$(inline!($($type)? ($text))),*])
+            $crate::text::Text(vec![$(inline!($($type)? ($text))),*])
         }
     }
 
     macro_rules! inline {
         ($type:ident ($text:tt)) => {
-            $crate::document::Inline {
-                kind: $crate::document::InlineType::$type($text.into()),
+            $crate::text::Inline {
+                kind: $crate::text::InlineType::$type($text.into()),
                 common: Default::default(),
             }
         };
@@ -870,7 +871,7 @@ mod tests {
     #[test]
     fn text_emphasis() {
         block!(block = r#"*emphasis*"#);
-        let mut text = document::Text::new();
+        let mut text = text::Text::new();
         block.text_rest(&mut text).unwrap();
         assert_eq!(text, text!(Emphasis("emphasis"), (" ")))
     }
@@ -878,7 +879,7 @@ mod tests {
     #[test]
     fn text_strong() {
         block!(block = r#"**strong**"#);
-        let mut text = document::Text::new();
+        let mut text = text::Text::new();
         block.text_rest(&mut text).unwrap();
         assert_eq!(text, text!(Strong("strong"), (" ")))
     }
@@ -886,7 +887,7 @@ mod tests {
     macro_rules! list {
         ($($text:tt: [$($sl:tt)*]),*) => {
             vec![$(
-                $crate::document::ListItem {
+                $crate::blocks::list::ListItem {
                     text: $text.into(),
                     sublist: list![$($sl)*],
                 },
@@ -911,11 +912,11 @@ mod tests {
         block!(block = "# Test");
         let block = block.parse().unwrap().unwrap();
         let got = block.kind.as_heading().unwrap();
-        let expected = document::Heading {
+        let expected = blocks::heading::Heading {
             title: " Test ".into(),
             numbered: true,
             toc: true,
-            ..document::Heading::new(1)
+            ..blocks::heading::Heading::new(1)
         };
         assert!(
             got.eq(&expected),
