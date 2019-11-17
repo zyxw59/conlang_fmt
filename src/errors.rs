@@ -74,6 +74,10 @@ pub enum ErrorKind {
         _0
     )]
     WriteIo(usize),
+    #[fail(display = "An IO error occurred while writing head matter")]
+    WriteIoHead,
+    #[fail(display = "An IO error occurred while writing tail matter")]
+    WriteIoTail,
 }
 
 impl ErrorKind {

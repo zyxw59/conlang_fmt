@@ -38,6 +38,6 @@ fn main_result() -> EResult<()> {
 
 fn print_errors(e: &dyn Fail) {
     for c in e.iter_chain() {
-        println!("{}", c);
+        eprintln!("{}", c);
     }
 }

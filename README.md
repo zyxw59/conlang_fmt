@@ -47,6 +47,25 @@ A block is a paragraph-level element, such as a section header, a table, or a
 paragraph of text.
 All blocks must be separated by blank lines, with no exceptions.
 
+#### Document control
+
+There are some blocks which control the document, but are not printed as normal
+blocks. These are:
+
+- `:title:`: The title of the document.
+  This is placed in the `<title>` element.
+- `:author:`: The author of the document
+  This is placed in a `<meta name="author">` element.
+- `:description:`: The description of the document.
+  This is placed in a `<meta name="description">` element.
+- `:style:`: A stylesheet for the document.
+  This is placed in a `<link rel="stylesheet">` element.
+- `:lang:`: The language of the document.
+  This is placed in the `lang` attribute on the `<html>` element.
+
+With the exception of `:style:`, only the first instance of each of these
+blocks will have any effect.
+
 #### Headings and sections
 
 Section headers are denoted by one or more `#` characters, as in Markdown.

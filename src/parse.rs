@@ -87,6 +87,11 @@ impl<'a> Block<'a> {
         let start = self.idx;
         Ok(Some(match self.next() {
             Some(':') => match self.directive()?.as_ref() {
+                "title" => self.parse_title()?,
+                "author" => self.parse_author()?,
+                "description" => self.parse_description()?,
+                "style" => self.parse_stylesheet()?,
+                "lang" => self.parse_lang()?,
                 "toc" => self.parse_toc()?,
                 "list" => self.parse_list()?,
                 "table" => self.parse_table()?,
@@ -100,6 +105,26 @@ impl<'a> Block<'a> {
             Some(_) => self.parse_paragraph(start)?,
             None => return Ok(None),
         }))
+    }
+
+    fn parse_title(&mut self) -> EResult<blocks::Block> {
+        Ok(blocks::control::DocumentControl::Title(self[self.idx..].iter().collect()).into())
+    }
+
+    fn parse_author(&mut self) -> EResult<blocks::Block> {
+        Ok(blocks::control::DocumentControl::Author(self[self.idx..].iter().collect()).into())
+    }
+
+    fn parse_description(&mut self) -> EResult<blocks::Block> {
+        Ok(blocks::control::DocumentControl::Description(self[self.idx..].iter().collect()).into())
+    }
+
+    fn parse_stylesheet(&mut self) -> EResult<blocks::Block> {
+        Ok(blocks::control::DocumentControl::Stylesheet(self[self.idx..].iter().collect()).into())
+    }
+
+    fn parse_lang(&mut self) -> EResult<blocks::Block> {
+        Ok(blocks::control::DocumentControl::Lang(self[self.idx..].iter().collect()).into())
     }
 
     fn parse_toc(&mut self) -> EResult<blocks::Block> {

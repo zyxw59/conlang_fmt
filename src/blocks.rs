@@ -6,12 +6,14 @@ use crate::errors::Result as EResult;
 use crate::text::Referenceable;
 
 pub mod contents;
+pub mod control;
 pub mod gloss;
 pub mod heading;
 pub mod list;
 pub mod replacements;
 pub mod table;
 
+use control::DocumentControl;
 use gloss::Gloss;
 use heading::HeadingLike;
 use replacements::Replacements;
@@ -139,6 +141,11 @@ pub trait BlockType: Debug {
 
     /// Returns a `&mut Table` if the block is a table, otherwise returns `None`.
     fn as_mut_gloss(&mut self) -> Option<&mut Gloss> {
+        None
+    }
+
+    /// Returns a `&DocumentControl` if the block is a document control block, otherwise returns `None`.
+    fn as_control(&self) -> Option<&DocumentControl> {
         None
     }
 }
