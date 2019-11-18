@@ -107,14 +107,14 @@ impl BlockType for Gloss {
 }
 
 impl Referenceable for Gloss {
-    fn write_reference(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
+    fn reference_text(&self) -> Text {
+        let mut text = Text::from("gloss ");
         if self.numbered {
-            write!(w, "gloss {}", self.number)?;
+            text.push(format!("{}", self.number));
         } else {
-            write!(w, "gloss ")?;
-            self.title.write_inline(w, document)?;
+            text.extend(&self.title);
         }
-        Ok(())
+        text
     }
 }
 

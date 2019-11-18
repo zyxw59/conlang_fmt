@@ -9,10 +9,10 @@ type OResult<T> = EResult<Option<T>>;
 
 pub trait Referenceable {
     /// Outputs the text of a reference to the block.
-    fn write_reference(&self, w: &mut dyn Write, document: &Document) -> IoResult<()>;
+    fn reference_text(&self) -> Text;
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Text(pub Vec<Inline>);
 
 pub const EMPTY_TEXT: &'static Text = &Text(Vec::new());
@@ -24,6 +24,10 @@ impl Text {
 
     pub fn push(&mut self, element: impl Into<Inline>) {
         self.0.push(element.into());
+    }
+
+    pub fn extend(&mut self, other: &Text) {
+        self.0.extend_from_slice(&other.0)
     }
 
     pub fn with_class(self, class: impl Into<String>) -> Text {
@@ -38,6 +42,14 @@ impl Text {
     pub fn write_inline(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
         for t in &self.0 {
             t.kind.write(w, &t.common, document)?;
+        }
+        Ok(())
+    }
+
+    /// Writes the text without any formatting (but still expanding replacements)
+    pub fn write_inline_plain(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
+        for t in &self.0 {
+            t.kind.write_plain(w, document)?;
         }
         Ok(())
     }
@@ -77,7 +89,7 @@ where
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Inline {
     pub kind: InlineType,
     pub common: InlineCommon,
@@ -103,7 +115,7 @@ impl From<String> for Inline {
     }
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct InlineCommon {
     pub class: String,
 }
@@ -137,7 +149,7 @@ where
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum InlineType {
     Emphasis(Text),
     Strong(Text),
@@ -188,7 +200,7 @@ impl InlineType {
             InlineType::Reference(id) => {
                 if let Some(block) = document.get_id(id) {
                     if let Some(referenceable) = block.kind.as_referenceable() {
-                        referenceable.write_reference(w, document)?;
+                        referenceable.reference_text().write_inline(w, document)?;
                     } else {
                         write!(
                             w,
@@ -217,6 +229,35 @@ impl InlineType {
         }
         if let Some(tag) = self.tag() {
             write!(w, "</{}>", tag)?;
+        }
+        Ok(())
+    }
+
+    fn write_plain(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
+        match self {
+            InlineType::Emphasis(t)
+            | InlineType::Strong(t)
+            | InlineType::Italics(t)
+            | InlineType::Bold(t)
+            | InlineType::SmallCaps(t)
+            | InlineType::Span(t)
+            | InlineType::Link(Link { title: t, .. }) => t.write_inline_plain(w, &document)?,
+            InlineType::Text(s) => write!(w, "{}", html::Encoder(s))?,
+            InlineType::Reference(id) => {
+                if let Some(block) = document.get_id(id) {
+                    if let Some(referenceable) = block.kind.as_referenceable() {
+                        referenceable.reference_text().write_inline_plain(w, document)?;
+                    } else {
+                        write!(w, "#{}", html::Encoder(id))?;
+                    }
+                } else {
+                    write!(w, "#{}", html::Encoder(id))?;
+                }
+            }
+            InlineType::Replace(key) => match document.get_replacement(key) {
+                Some(t) => t.write_inline_plain(w, &document)?,
+                None => write!(w, ":{}:", html::Encoder(key))?,
+            },
         }
         Ok(())
     }
@@ -298,7 +339,7 @@ impl UpdateParam for InlineType {
     }
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Link {
     pub url: String,
     pub title: Text,

@@ -108,23 +108,33 @@ impl<'a> Block<'a> {
     }
 
     fn parse_title(&mut self) -> EResult<blocks::Block> {
-        Ok(blocks::control::DocumentControl::Title(self[self.idx..].iter().collect()).into())
+        let mut text = text::Text::new();
+        self.text_rest(&mut text)?;
+        Ok(blocks::control::DocumentControl::Title(text).into())
     }
 
     fn parse_author(&mut self) -> EResult<blocks::Block> {
-        Ok(blocks::control::DocumentControl::Author(self[self.idx..].iter().collect()).into())
+        let mut text = text::Text::new();
+        self.text_rest(&mut text)?;
+        Ok(blocks::control::DocumentControl::Author(text).into())
     }
 
     fn parse_description(&mut self) -> EResult<blocks::Block> {
-        Ok(blocks::control::DocumentControl::Description(self[self.idx..].iter().collect()).into())
+        let mut text = text::Text::new();
+        self.text_rest(&mut text)?;
+        Ok(blocks::control::DocumentControl::Description(text).into())
     }
 
     fn parse_stylesheet(&mut self) -> EResult<blocks::Block> {
-        Ok(blocks::control::DocumentControl::Stylesheet(self[self.idx..].iter().collect()).into())
+        let mut text = text::Text::new();
+        self.text_rest(&mut text)?;
+        Ok(blocks::control::DocumentControl::Stylesheet(text).into())
     }
 
     fn parse_lang(&mut self) -> EResult<blocks::Block> {
-        Ok(blocks::control::DocumentControl::Lang(self[self.idx..].iter().collect()).into())
+        let mut text = text::Text::new();
+        self.text_rest(&mut text)?;
+        Ok(blocks::control::DocumentControl::Lang(text).into())
     }
 
     fn parse_toc(&mut self) -> EResult<blocks::Block> {

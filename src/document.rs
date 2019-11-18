@@ -14,7 +14,6 @@ use crate::blocks::{
     Block, BlockCommon,
 };
 use crate::errors::{ErrorKind, Result as EResult};
-use crate::html;
 use crate::text::Text;
 
 #[derive(Debug, Default)]
@@ -39,15 +38,15 @@ pub struct Document {
     /// The first unused number for blocks without an ID.
     noid_index: usize,
     /// The title of the document.
-    title: Option<String>,
+    title: Option<Text>,
     /// The author of the document.
-    author: Option<String>,
+    author: Option<Text>,
     /// The description of the document.
-    description: Option<String>,
+    description: Option<Text>,
     /// The stylesheets for the document.
-    stylesheets: Vec<String>,
+    stylesheets: Vec<Text>,
     /// The global `lang` attribute for the document.
-    lang: Option<String>,
+    lang: Option<Text>,
 }
 
 impl Document {
@@ -92,20 +91,20 @@ impl Document {
 
     fn control(&mut self, control: &DocumentControl) {
         match control {
-            DocumentControl::Title(s) => {
-                self.title.get_or_insert(s.clone());
+            DocumentControl::Title(text) => {
+                self.title.get_or_insert(text.clone());
             }
-            DocumentControl::Author(s) => {
-                self.author.get_or_insert(s.clone());
+            DocumentControl::Author(text) => {
+                self.author.get_or_insert(text.clone());
             }
-            DocumentControl::Description(s) => {
-                self.description.get_or_insert(s.clone());
+            DocumentControl::Description(text) => {
+                self.description.get_or_insert(text.clone());
             }
-            DocumentControl::Stylesheet(s) => {
-                self.stylesheets.push(s.clone());
+            DocumentControl::Stylesheet(text) => {
+                self.stylesheets.push(text.clone());
             }
-            DocumentControl::Lang(s) => {
-                self.lang.get_or_insert(s.clone());
+            DocumentControl::Lang(text) => {
+                self.lang.get_or_insert(text.clone());
             }
         }
     }
@@ -168,38 +167,41 @@ impl Document {
         writeln!(w, "<!doctype html>")?;
         write!(w, "<html")?;
         if let Some(lang) = &self.lang {
-            writeln!(w, " lang=\"{}\">", html::Encoder(lang))?;
+            write!(w, " lang=\"")?;
+            lang.write_inline_plain(w, self)?;
+            writeln!(w, "\">")?;
         } else {
             writeln!(w, ">")?;
         }
         writeln!(w, "<head>")?;
         writeln!(w, "<meta charset=\"utf-8\" />")?;
         if let Some(title) = &self.title {
-            writeln!(w, "<title>{}</title>", html::Encoder(title))?;
+            write!(w, "<title>")?;
+            title.write_inline_plain(w, self)?;
+            writeln!(w, "</title>")?;
         }
         if let Some(author) = &self.author {
-            writeln!(
-                w,
-                "<meta name=\"author\" content=\"{}\" />",
-                html::Encoder(author)
-            )?;
+            write!(w, "<meta name=\"author\" content=\"")?;
+            author.write_inline_plain(w, self)?;
+            writeln!(w, "\" />")?;
         }
         if let Some(description) = &self.description {
-            writeln!(
-                w,
-                "<meta name=\"description\" content=\"{}\" />",
-                html::Encoder(description)
-            )?;
+            write!(w, "<meta name=\"description\" content=\"")?;
+            description.write_inline_plain(w, self)?;
+            writeln!(w, "\" />")?;
         }
         for stylesheet in &self.stylesheets {
-            writeln!(
-                w,
-                "<link rel=\"stylesheet\" type=\"text/css\" href=\"{}\" />",
-                html::Encoder(stylesheet)
-            )?;
+            write!(w, "<link rel=\"stylesheet\" type=\"text/css\" href=\"")?;
+            stylesheet.write_inline_plain(w, self)?;
+            writeln!(w, "\" />")?;
         }
         writeln!(w, "</head>")?;
         writeln!(w, "<body>")?;
+        if let Some(title) = &self.title {
+            write!(w, "<h1 class=\"title\">")?;
+            title.write_inline(w, self)?;
+            writeln!(w, "</h1>")?;
+        }
         Ok(())
     }
 

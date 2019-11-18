@@ -99,14 +99,14 @@ impl BlockType for Table {
 }
 
 impl Referenceable for Table {
-    fn write_reference(&self, w: &mut dyn Write, document: &Document) -> IoResult<()> {
+    fn reference_text(&self) -> Text {
+        let mut text = Text::from("table ");
         if self.numbered {
-            write!(w, "table {}", self.number)?;
+            text.push(format!("{}", self.number));
         } else {
-            write!(w, "table ")?;
-            self.title.write_inline(w, document)?;
+            text.extend(&self.title);
         }
-        Ok(())
+        text
     }
 }
 

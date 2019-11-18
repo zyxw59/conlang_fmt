@@ -6,7 +6,7 @@ use crate::blocks::{BlockCommon, BlockType, Parameter};
 use crate::document::Document;
 use crate::errors::Result as EResult;
 use crate::html;
-use crate::text::{Referenceable, Text, EMPTY_TEXT};
+use crate::text::{Inline, Referenceable, Text, EMPTY_TEXT};
 
 type OResult<T> = EResult<Option<T>>;
 
@@ -18,6 +18,17 @@ fn write_section_number(w: &mut dyn Write, number: &[usize]) -> IoResult<()> {
         write!(w, "{}.</span>", last)?;
     }
     Ok(())
+}
+
+/// Returns a section number as a `Text`.
+fn section_number_text(number: &[usize]) -> Text {
+    if let Some((last, rest)) = number.split_last() {
+        let mut text = section_number_text(rest).with_class("secnum");
+        text.push(Inline::from(format!("{}.", last)));
+        text
+    } else {
+        Text::new()
+    }
 }
 
 pub trait HeadingLike: Debug {
@@ -124,14 +135,14 @@ impl BlockType for Heading {
 }
 
 impl Referenceable for Heading {
-    fn write_reference(&self, mut w: &mut dyn Write, document: &Document) -> IoResult<()> {
-        write!(w, "section ")?;
+    fn reference_text(&self) -> Text {
+        let mut text = Text::from("section ");
         if self.numbered {
-            write_section_number(&mut w, &self.number)?;
+            text.extend(&section_number_text(&self.number))
         } else {
-            self.title.write_inline(w, document)?;
-        }
-        Ok(())
+            text.extend(&self.title)
+        };
+        text
     }
 }
 
