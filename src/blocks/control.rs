@@ -11,6 +11,7 @@ pub enum DocumentControl {
     Author(Text),
     Description(Text),
     Lang(Text),
+    Import(Text),
 }
 
 impl BlockType for DocumentControl {

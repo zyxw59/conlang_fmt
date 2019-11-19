@@ -2,7 +2,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::default::Default;
 use std::fmt::Debug;
-use std::io::{Result as IoResult, Write};
+use std::fs::File;
+use std::io::{BufReader, Result as IoResult, Write};
+use std::path::Path;
 
 use failure::ResultExt;
 use itertools::Itertools;
@@ -14,6 +16,7 @@ use crate::blocks::{
     Block, BlockCommon,
 };
 use crate::errors::{ErrorKind, Result as EResult};
+use crate::input::Input;
 use crate::text::Text;
 
 #[derive(Debug, Default)]
@@ -54,7 +57,7 @@ impl Document {
     pub fn add_block(&mut self, mut block: Block) -> EResult<()> {
         let mut idx = self.blocks.len();
         if let Some(control) = block.kind.as_control() {
-            self.control(control);
+            self.control(control)?;
         }
         if let Some(heading) = block.kind.as_mut_heading() {
             idx = self.add_heading(heading, &mut block.common)?;
@@ -89,7 +92,7 @@ impl Document {
         Ok(())
     }
 
-    fn control(&mut self, control: &DocumentControl) {
+    fn control(&mut self, control: &DocumentControl) -> EResult<()> {
         match control {
             DocumentControl::Title(text) => {
                 self.title.get_or_insert(text.clone());
@@ -106,7 +109,23 @@ impl Document {
             DocumentControl::Lang(text) => {
                 self.lang.get_or_insert(text.clone());
             }
+            DocumentControl::Import(text) => {
+                let mut filename = Vec::new();
+                text.write_inline_plain(&mut filename, self)
+                    .expect("Writing to `Vec<u8>` shouldn't fail");
+                let filename =
+                    String::from_utf8(filename).expect("`Text` should always write valid utf-8");
+                let file = Path::new(filename.trim())
+                    .canonicalize()
+                    .and_then(File::open)
+                    .context(ErrorKind::FileNotFound(filename))?;
+                let mut input = Input::new(BufReader::new(file));
+                while let Some(block) = input.next_block()?.parse()? {
+                    self.add_block(block)?;
+                }
+            }
         }
+        Ok(())
     }
 
     fn add_heading(

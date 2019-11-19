@@ -246,7 +246,9 @@ impl InlineType {
             InlineType::Reference(id) => {
                 if let Some(block) = document.get_id(id) {
                     if let Some(referenceable) = block.kind.as_referenceable() {
-                        referenceable.reference_text().write_inline_plain(w, document)?;
+                        referenceable
+                            .reference_text()
+                            .write_inline_plain(w, document)?;
                     } else {
                         write!(w, "#{}", html::Encoder(id))?;
                     }

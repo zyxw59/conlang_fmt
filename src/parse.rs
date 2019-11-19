@@ -92,6 +92,7 @@ impl<'a> Block<'a> {
                 "description" => self.parse_description()?,
                 "style" => self.parse_stylesheet()?,
                 "lang" => self.parse_lang()?,
+                "import" => self.parse_import()?,
                 "toc" => self.parse_toc()?,
                 "list" => self.parse_list()?,
                 "table" => self.parse_table()?,
@@ -135,6 +136,12 @@ impl<'a> Block<'a> {
         let mut text = text::Text::new();
         self.text_rest(&mut text)?;
         Ok(blocks::control::DocumentControl::Lang(text).into())
+    }
+
+    fn parse_import(&mut self) -> EResult<blocks::Block> {
+        let mut text = text::Text::new();
+        self.text_rest(&mut text)?;
+        Ok(blocks::control::DocumentControl::Import(text).into())
     }
 
     fn parse_toc(&mut self) -> EResult<blocks::Block> {

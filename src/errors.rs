@@ -69,6 +69,8 @@ pub enum ErrorKind {
     Unicode(usize),
     #[fail(display = "An IO error occurred while reading line {}", _0)]
     ReadIo(usize),
+    #[fail(display = "File {} not found", _0)]
+    FileNotFound(String),
     #[fail(
         display = "An IO error occurred while writing block starting on line {}",
         _0
