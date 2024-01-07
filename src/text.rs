@@ -26,6 +26,13 @@ impl Text {
         self.0.push(element.into());
     }
 
+    /// Pushes the content of the buffer as inline text, and replaces the buffer with an empty one.
+    pub fn push_buffer(&mut self, buffer: &mut String) {
+        if !buffer.is_empty() {
+            self.0.push(std::mem::take(buffer).into());
+        }
+    }
+
     pub fn extend(&mut self, other: &Text) {
         self.0.extend_from_slice(&other.0)
     }

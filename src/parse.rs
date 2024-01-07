@@ -62,15 +62,6 @@ macro_rules! update_one {
     };
 }
 
-macro_rules! push_and_renew {
-    ($buffer:ident : $constructor:expr, $collector:ident) => {
-        if $buffer.len() != 0 {
-            $collector.push($buffer);
-            $buffer = $constructor;
-        }
-    };
-}
-
 impl<'a> Block<'a> {
     pub fn new(slice: &'a [char], start: Option<usize>) -> Block<'a> {
         Block {
@@ -617,12 +608,12 @@ impl<'a> Block<'a> {
                 c if predicate(self, c) => break,
                 // bracketed text
                 '{' => {
-                    push_and_renew!(buffer: String::new(), text);
+                    text.push_buffer(&mut buffer);
                     self.text_until_char(text, '}')?;
                 }
                 // directive
                 ':' => {
-                    push_and_renew!(buffer: String::new(), text);
+                    text.push_buffer(&mut buffer);
                     text.push(match self.directive()?.as_ref() {
                         // cross reference
                         "ref" => self.simple_inline(text::InlineType::reference())?,
@@ -634,7 +625,7 @@ impl<'a> Block<'a> {
                 }
                 // emphasis (semantic)
                 '*' => {
-                    push_and_renew!(buffer: String::new(), text);
+                    text.push_buffer(&mut buffer);
                     text.push(self.formatting_inline(
                         '*',
                         text::InlineType::Emphasis,
@@ -643,7 +634,7 @@ impl<'a> Block<'a> {
                 }
                 // italics/bold (non-semantic)
                 '_' => {
-                    push_and_renew!(buffer: String::new(), text);
+                    text.push_buffer(&mut buffer);
                     text.push(self.formatting_inline(
                         '_',
                         text::InlineType::Italics,
@@ -652,7 +643,7 @@ impl<'a> Block<'a> {
                 }
                 // small caps
                 '^' => {
-                    push_and_renew!(buffer: String::new(), text);
+                    text.push_buffer(&mut buffer);
                     // rewind
                     let mut inner = text::Text::new();
                     self.text_until_char(&mut inner, '^')?;
@@ -661,7 +652,7 @@ impl<'a> Block<'a> {
                 }
                 // generic `span`
                 '`' => {
-                    push_and_renew!(buffer: String::new(), text);
+                    text.push_buffer(&mut buffer);
                     let mut inner = text::Text::new();
                     self.text_until_char(&mut inner, '`')?;
                     let kind = text::InlineType::Span(inner);
