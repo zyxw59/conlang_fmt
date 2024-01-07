@@ -744,22 +744,21 @@ impl<'a> Block<'a> {
     fn expect_exact(&mut self, expected: char) -> EResult<()> {
         match self.next() {
             Some(c) if c == expected => Ok(()),
-            Some(c) => Err(ErrorKind::Expected(expected, c))
-                .context(ErrorKind::Block(self.start.unwrap())),
+            Some(c) => {
+                Err(ErrorKind::Expected(expected, c)).context(ErrorKind::Block(self.start.unwrap()))
+            }
             None => self.end_of_block(EndOfBlockKind::Expect(expected)),
         }
     }
 
     /// Returns an `EndOfBlock` error, wrapped in a `Block` error and a `Result`
     fn end_of_block<T>(&self, kind: EndOfBlockKind) -> EResult<T> {
-        Err(ErrorKind::EndOfBlock(kind))
-            .context(ErrorKind::Block(self.start.unwrap()))
+        Err(ErrorKind::EndOfBlock(kind)).context(ErrorKind::Block(self.start.unwrap()))
     }
 
     /// Returns a `Parameter` error, wrapped in a `Block` error and a `Result`
     fn parameter_error<T>(&self, parameter: String) -> EResult<T> {
-        Err(ErrorKind::Parameter(parameter))
-            .context(ErrorKind::Block(self.start.unwrap()))
+        Err(ErrorKind::Parameter(parameter)).context(ErrorKind::Block(self.start.unwrap()))
     }
 
     /// Returns the starting line number of the block, which is only defined for non-empty blocks.
