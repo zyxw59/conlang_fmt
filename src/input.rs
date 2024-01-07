@@ -1,8 +1,6 @@
 use std::io::{BufRead, Lines};
 use std::iter::Enumerate;
 
-use failure::ResultExt;
-
 use crate::errors::{ErrorKind, Result as EResult};
 use crate::parse::Block;
 
@@ -34,7 +32,7 @@ where
         self.buffer.clear();
         while let Some((line_number, line)) = self.lines.next() {
             // unwrap line
-            let line = line.with_context(|e| ErrorKind::input_error(e, line_number))?;
+            let line = line.map_err(|e| ErrorKind::input_error(e, line_number))?;
             // blank lines
             if line.trim().is_empty() {
                 // if the buffer is empty, don't return anything

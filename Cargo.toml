@@ -5,5 +5,6 @@ authors = ["Emily Crandall Fleischman <emilycf@mit.edu>"]
 edition = "2021"
 
 [dependencies]
-failure = "0.1.6"
+anyhow = "1.0.79"
 itertools = "0.12"
+thiserror = "1.0.56"

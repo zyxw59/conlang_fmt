@@ -7,14 +7,15 @@ mod input;
 mod parse;
 mod text;
 
-use failure::Fail;
 use std::io;
 
 use errors::Result as EResult;
 
 fn main() {
     if let Err(e) = main_result() {
-        print_errors(&e);
+        for err in e.chain() {
+            eprintln!("{err}");
+        }
     }
 }
 
@@ -34,10 +35,4 @@ fn main_result() -> EResult<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
     document.write(&mut stdout)
-}
-
-fn print_errors(e: &dyn Fail) {
-    for c in e.iter_chain() {
-        eprintln!("{}", c);
-    }
 }

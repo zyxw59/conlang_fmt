@@ -1,6 +1,6 @@
 use std::io::{Result as IoResult, Write};
 
-use failure::ResultExt;
+use anyhow::Context;
 
 use crate::blocks::{BlockCommon, BlockType, Parameter};
 use crate::document::Document;
@@ -84,7 +84,7 @@ impl BlockType for Contents {
                 self.max_level = param
                     .1
                     .parse::<usize>()
-                    .with_context(|_| ErrorKind::Parse)?;
+                    .context(ErrorKind::Parse)?;
                 None
             }
             _ => Some(param),

@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
-use failure::{Fail, ResultExt};
+use anyhow::Context;
+
 use itertools::Itertools;
 
 use crate::blocks::{self, Parameter, UpdateParam};
@@ -195,9 +196,8 @@ impl<'a> Block<'a> {
                 c if c.is_whitespace() => {}
                 // error
                 c => {
-                    return Err(ErrorKind::Expected('|', c)
-                        .context(ErrorKind::Block(self.start.unwrap()))
-                        .into());
+                    return Err(ErrorKind::Expected('|', c))
+                        .context(ErrorKind::Block(self.start.unwrap()));
                 }
             }
         }
@@ -230,9 +230,8 @@ impl<'a> Block<'a> {
                     '\n' if self.match_hard_line('\n') => break,
                     c if c.is_whitespace() => {}
                     c => {
-                        return Err(ErrorKind::Expected('|', c)
-                            .context(ErrorKind::Block(self.start.unwrap()))
-                            .into());
+                        return Err(ErrorKind::Expected('|', c))
+                            .context(ErrorKind::Block(self.start.unwrap()));
                     }
                 }
             }
@@ -283,9 +282,8 @@ impl<'a> Block<'a> {
                     // check if we've already entered the postamble; a gloss line here
                     // is an error
                     if !gloss.postamble.is_empty() {
-                        return Err(ErrorKind::GlossLine
-                            .context(ErrorKind::Block(self.start.unwrap()))
-                            .into());
+                        return Err(ErrorKind::GlossLine)
+                            .context(ErrorKind::Block(self.start.unwrap()));
                     }
                     let mut line = blocks::gloss::GlossLine::new();
                     line.class = class;
@@ -745,25 +743,22 @@ impl<'a> Block<'a> {
     fn expect_exact(&mut self, expected: char) -> EResult<()> {
         match self.next() {
             Some(c) if c == expected => Ok(()),
-            Some(c) => Err(ErrorKind::Expected(expected, c)
-                .context(ErrorKind::Block(self.start.unwrap()))
-                .into()),
+            Some(c) => Err(ErrorKind::Expected(expected, c))
+                .context(ErrorKind::Block(self.start.unwrap())),
             None => self.end_of_block(EndOfBlockKind::Expect(expected)),
         }
     }
 
     /// Returns an `EndOfBlock` error, wrapped in a `Block` error and a `Result`
     fn end_of_block<T>(&self, kind: EndOfBlockKind) -> EResult<T> {
-        Err(ErrorKind::EndOfBlock(kind)
+        Err(ErrorKind::EndOfBlock(kind))
             .context(ErrorKind::Block(self.start.unwrap()))
-            .into())
     }
 
     /// Returns a `Parameter` error, wrapped in a `Block` error and a `Result`
     fn parameter_error<T>(&self, parameter: String) -> EResult<T> {
-        Err(ErrorKind::Parameter(parameter)
+        Err(ErrorKind::Parameter(parameter))
             .context(ErrorKind::Block(self.start.unwrap()))
-            .into())
     }
 
     /// Returns the starting line number of the block, which is only defined for non-empty blocks.
