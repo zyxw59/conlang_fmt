@@ -4,32 +4,29 @@ pub use anyhow::{Error, Result};
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ErrorKind {
-    #[error("Failed to parse block starting on line {}", _0)]
+    #[error("Failed to parse block starting on line {0}")]
     Block(usize),
-    #[error("Unexpected end of block, {}", _0)]
+    #[error("Unexpected end of block, {0}")]
     EndOfBlock(EndOfBlockKind),
-    #[error("Expected `{}`, got `{}`", _0, _1)]
+    #[error("Expected `{0}`, got `{1}`")]
     Expected(char, char),
     #[error("Gloss line after postamble")]
     GlossLine,
     #[error("Parsing error")]
     Parse,
-    #[error("Unknown parameter {}", _0)]
+    #[error("Unknown parameter {0}")]
     Parameter(String),
-    #[error("Duplicate ID {}", _0)]
+    #[error("Duplicate ID {0}")]
     Id(String),
-    #[error("Duplicate replace directive {}", _0)]
+    #[error("Duplicate replace directive {0}")]
     Replace(String),
-    #[error("Invalid UTF-8 in line {}", _0)]
+    #[error("Invalid UTF-8 in line {0}")]
     Unicode(usize),
-    #[error("An IO error occurred while reading line {}", _0)]
+    #[error("An IO error occurred while reading line {0}")]
     ReadIo(usize),
-    #[error("File {} not found", _0)]
+    #[error("File {0} not found")]
     FileNotFound(String),
-    #[error(
-        "An IO error occurred while writing block starting on line {}",
-        _0
-    )]
+    #[error("An IO error occurred while writing block starting on line {0}")]
     WriteIo(usize),
     #[error("An IO error occurred while writing head matter")]
     WriteIoHead,
@@ -51,6 +48,6 @@ impl ErrorKind {
 pub enum EndOfBlockKind {
     #[error("expected a character after `\\`")]
     Escape,
-    #[error("expected `{}`", _0)]
+    #[error("expected `{0}`")]
     Expect(char),
 }
