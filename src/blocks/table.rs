@@ -1,6 +1,6 @@
 use std::io::{Result as IoResult, Write};
 
-use failure::ResultExt;
+use anyhow::Context;
 
 use crate::blocks::{BlockCommon, BlockType, Parameter, UpdateParam};
 use crate::document::Document;
@@ -253,17 +253,11 @@ impl UpdateParam for Cell {
                 None
             }
             Some("rows") => {
-                self.rows = param
-                    .1
-                    .parse::<usize>()
-                    .with_context(|_| ErrorKind::Parse)?;
+                self.rows = param.1.parse::<usize>().context(ErrorKind::Parse)?;
                 None
             }
             Some("cols") => {
-                self.cols = param
-                    .1
-                    .parse::<usize>()
-                    .with_context(|_| ErrorKind::Parse)?;
+                self.cols = param.1.parse::<usize>().context(ErrorKind::Parse)?;
                 None
             }
             Some(_) => Some(param),

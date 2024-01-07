@@ -20,6 +20,8 @@ impl Replacements {
 
     /// Inserts the given key/value pair, returning an error if the key is already present.
     pub fn insert(&mut self, key: String, value: Text) -> EResult<()> {
+        // using `HashMap::entry` here moves `key`, so it can't be used in the error.
+        #[allow(clippy::map_entry)]
         if self.replacements.contains_key(&key) {
             Err(ErrorKind::Replace(key).into())
         } else {

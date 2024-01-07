@@ -100,7 +100,7 @@ impl BlockType for Heading {
         if self.numbered {
             write_section_number(w, &self.number)?;
         }
-        self.title.write_inline(w, &document)?;
+        self.title.write_inline(w, document)?;
         writeln!(w, "</{}>\n", self.tag())
     }
 
@@ -205,7 +205,6 @@ impl FillerHeading {
                 level,
                 ..Default::default()
             },
-            ..Default::default()
         }
     }
 }

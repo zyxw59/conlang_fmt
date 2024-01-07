@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{BufReader, Result as IoResult, Write};
 use std::path::Path;
 
-use failure::ResultExt;
+use anyhow::Context;
 use itertools::Itertools;
 
 use crate::blocks::{

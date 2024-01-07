@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
-use failure::{Fail, ResultExt};
+use anyhow::Context;
+
 use itertools::Itertools;
 
 use crate::blocks::{self, Parameter, UpdateParam};
@@ -13,6 +14,7 @@ type OResult<T> = EResult<Option<T>>;
 #[derive(Debug)]
 pub struct Block<'a> {
     slice: &'a [char],
+    /// The starting line number of the block, which is only defined for non-empty blocks.
     start: Option<usize>,
     idx: usize,
 }
@@ -195,15 +197,14 @@ impl<'a> Block<'a> {
                 c if c.is_whitespace() => {}
                 // error
                 c => {
-                    return Err(ErrorKind::Expected('|', c)
-                        .context(ErrorKind::Block(self.start.unwrap()))
-                        .into());
+                    return Err(ErrorKind::Expected('|', c))
+                        .context(ErrorKind::Block(self.start.unwrap()));
                 }
             }
         }
         // now we've matched a hard line; time to start constructing the rows of the
         // table
-        while let Some(_) = self.peek() {
+        while self.peek().is_some() {
             self.skip_whitespace();
             // skip until after the double colon
             self.idx += 2;
@@ -230,9 +231,8 @@ impl<'a> Block<'a> {
                     '\n' if self.match_hard_line('\n') => break,
                     c if c.is_whitespace() => {}
                     c => {
-                        return Err(ErrorKind::Expected('|', c)
-                            .context(ErrorKind::Block(self.start.unwrap()))
-                            .into());
+                        return Err(ErrorKind::Expected('|', c))
+                            .context(ErrorKind::Block(self.start.unwrap()));
                     }
                 }
             }
@@ -254,7 +254,7 @@ impl<'a> Block<'a> {
         self.text_until_hard_line(&mut gloss.title)?;
         // now we've matched a hard line; time to start constructing the lines of the
         // gloss
-        while let Some(_) = self.peek() {
+        while self.peek().is_some() {
             self.skip_whitespace();
             // skip until after the double colon
             self.idx += 2;
@@ -283,9 +283,8 @@ impl<'a> Block<'a> {
                     // check if we've already entered the postamble; a gloss line here
                     // is an error
                     if !gloss.postamble.is_empty() {
-                        return Err(ErrorKind::GlossLine
-                            .context(ErrorKind::Block(self.start.unwrap()))
-                            .into());
+                        return Err(ErrorKind::GlossLine)
+                            .context(ErrorKind::Block(self.start.unwrap()));
                     }
                     let mut line = blocks::gloss::GlossLine::new();
                     line.class = class;
@@ -465,7 +464,7 @@ impl<'a> Block<'a> {
                 // bracketed text
                 '{' => {
                     self.idx += 1;
-                    self.bracketed(&mut param_builder.last_mut().unwrap())?;
+                    self.bracketed(param_builder.last_mut().unwrap())?;
                 }
                 // end of this parameter; return what we have so far, and pop the `,`.
                 ',' => {
@@ -529,7 +528,7 @@ impl<'a> Block<'a> {
                 // bracketed text
                 '{' => {
                     self.idx += 1;
-                    self.bracketed(&mut param_builder.last_mut().unwrap())?;
+                    self.bracketed(param_builder.last_mut().unwrap())?;
                 }
                 // end of this parameter; return what we have so far, and pop the `,`.
                 ',' => {
@@ -745,28 +744,25 @@ impl<'a> Block<'a> {
     fn expect_exact(&mut self, expected: char) -> EResult<()> {
         match self.next() {
             Some(c) if c == expected => Ok(()),
-            Some(c) => Err(ErrorKind::Expected(expected, c)
-                .context(ErrorKind::Block(self.start.unwrap()))
-                .into()),
+            Some(c) => {
+                Err(ErrorKind::Expected(expected, c)).context(ErrorKind::Block(self.start.unwrap()))
+            }
             None => self.end_of_block(EndOfBlockKind::Expect(expected)),
         }
     }
 
     /// Returns an `EndOfBlock` error, wrapped in a `Block` error and a `Result`
     fn end_of_block<T>(&self, kind: EndOfBlockKind) -> EResult<T> {
-        Err(ErrorKind::EndOfBlock(kind)
-            .context(ErrorKind::Block(self.start.unwrap()))
-            .into())
+        Err(ErrorKind::EndOfBlock(kind)).context(ErrorKind::Block(self.start.unwrap()))
     }
 
     /// Returns a `Parameter` error, wrapped in a `Block` error and a `Result`
     fn parameter_error<T>(&self, parameter: String) -> EResult<T> {
-        Err(ErrorKind::Parameter(parameter)
-            .context(ErrorKind::Block(self.start.unwrap()))
-            .into())
+        Err(ErrorKind::Parameter(parameter)).context(ErrorKind::Block(self.start.unwrap()))
     }
 
     /// Returns the starting line number of the block, which is only defined for non-empty blocks.
+    #[cfg(test)]
     pub fn start(&self) -> Option<usize> {
         self.start
     }
@@ -965,7 +961,7 @@ mod tests {
             r#"assertion failed: `(left == right)`
   left: `{:#?}`,
  right: `{:#?}`"#,
-            &*got,
+            got,
             &expected
         );
     }

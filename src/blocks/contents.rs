@@ -1,6 +1,6 @@
 use std::io::{Result as IoResult, Write};
 
-use failure::ResultExt;
+use anyhow::Context;
 
 use crate::blocks::{BlockCommon, BlockType, Parameter};
 use crate::document::Document;
@@ -57,7 +57,7 @@ impl Contents {
                     heading.title().write_inline(w, document)?;
                     write!(w, "</a>")?;
                 }
-                self.write_sublist(w, level + 1, heading.children(), &document)?;
+                self.write_sublist(w, level + 1, heading.children(), document)?;
                 writeln!(w, "</li>")?;
             }
             writeln!(w, "</ol>\n")?;
@@ -72,19 +72,16 @@ impl BlockType for Contents {
         write!(w, "id=\"{}\" ", html::Encoder(&common.id))?;
         write!(w, "class=\"{} toc\">", html::Encoder(&common.class))?;
         write!(w, "<p class=\"toc-heading\">")?;
-        self.title.write_inline(w, &document)?;
+        self.title.write_inline(w, document)?;
         writeln!(w, "</p>")?;
-        self.write_sublist(w, 1, document.get_section_list(None), &document)?;
+        self.write_sublist(w, 1, document.get_section_list(None), document)?;
         writeln!(w, "</div>\n")
     }
 
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref().map(|n| n.as_ref()) {
             Some("maxlevel") => {
-                self.max_level = param
-                    .1
-                    .parse::<usize>()
-                    .with_context(|_| ErrorKind::Parse)?;
+                self.max_level = param.1.parse::<usize>().context(ErrorKind::Parse)?;
                 None
             }
             _ => Some(param),
