@@ -30,7 +30,7 @@ where
         let mut start_line = None;
         // clear buffer
         self.buffer.clear();
-        while let Some((line_number, line)) = self.lines.next() {
+        for (line_number, line) in &mut self.lines {
             // unwrap line
             let line = line.map_err(|e| ErrorKind::input_error(e, line_number))?;
             // blank lines

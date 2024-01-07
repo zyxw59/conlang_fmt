@@ -46,7 +46,7 @@ impl BlockType for List {
         write!(w, "id=\"{}\" ", html::Encoder(&common.id))?;
         write!(w, "class=\"{}\">", html::Encoder(&common.class))?;
         List::write_list(w, &self.items, self.ordered, document)?;
-        write!(w, "</{}>\n", List::tag(self.ordered))
+        writeln!(w, "</{}>", List::tag(self.ordered))
     }
 
     fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {

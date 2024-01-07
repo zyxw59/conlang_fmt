@@ -147,9 +147,10 @@ impl GlossLine {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub enum GlossLineType {
     NoSplit,
+    #[default]
     Split,
 }
 
@@ -169,8 +170,3 @@ impl GlossLineType {
     }
 }
 
-impl Default for GlossLineType {
-    fn default() -> GlossLineType {
-        GlossLineType::Split
-    }
-}

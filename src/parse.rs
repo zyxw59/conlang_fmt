@@ -14,6 +14,7 @@ type OResult<T> = EResult<Option<T>>;
 #[derive(Debug)]
 pub struct Block<'a> {
     slice: &'a [char],
+    /// The starting line number of the block, which is only defined for non-empty blocks.
     start: Option<usize>,
     idx: usize,
 }
@@ -203,7 +204,7 @@ impl<'a> Block<'a> {
         }
         // now we've matched a hard line; time to start constructing the rows of the
         // table
-        while let Some(_) = self.peek() {
+        while self.peek().is_some() {
             self.skip_whitespace();
             // skip until after the double colon
             self.idx += 2;
@@ -253,7 +254,7 @@ impl<'a> Block<'a> {
         self.text_until_hard_line(&mut gloss.title)?;
         // now we've matched a hard line; time to start constructing the lines of the
         // gloss
-        while let Some(_) = self.peek() {
+        while self.peek().is_some() {
             self.skip_whitespace();
             // skip until after the double colon
             self.idx += 2;
@@ -463,7 +464,7 @@ impl<'a> Block<'a> {
                 // bracketed text
                 '{' => {
                     self.idx += 1;
-                    self.bracketed(&mut param_builder.last_mut().unwrap())?;
+                    self.bracketed(param_builder.last_mut().unwrap())?;
                 }
                 // end of this parameter; return what we have so far, and pop the `,`.
                 ',' => {
@@ -527,7 +528,7 @@ impl<'a> Block<'a> {
                 // bracketed text
                 '{' => {
                     self.idx += 1;
-                    self.bracketed(&mut param_builder.last_mut().unwrap())?;
+                    self.bracketed(param_builder.last_mut().unwrap())?;
                 }
                 // end of this parameter; return what we have so far, and pop the `,`.
                 ',' => {
@@ -762,6 +763,7 @@ impl<'a> Block<'a> {
     }
 
     /// Returns the starting line number of the block, which is only defined for non-empty blocks.
+    #[cfg(test)]
     pub fn start(&self) -> Option<usize> {
         self.start
     }
@@ -960,7 +962,7 @@ mod tests {
             r#"assertion failed: `(left == right)`
   left: `{:#?}`,
  right: `{:#?}`"#,
-            &*got,
+            got,
             &expected
         );
     }

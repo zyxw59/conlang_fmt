@@ -15,7 +15,7 @@ pub trait Referenceable {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Text(pub Vec<Inline>);
 
-pub const EMPTY_TEXT: &'static Text = &Text(Vec::new());
+pub const EMPTY_TEXT: &Text = &Text(Vec::new());
 
 impl Text {
     pub fn new() -> Text {
@@ -195,7 +195,7 @@ impl InlineType {
             | InlineType::Bold(t)
             | InlineType::SmallCaps(t)
             | InlineType::Span(t)
-            | InlineType::Link(Link { title: t, .. }) => t.write_inline(w, &document)?,
+            | InlineType::Link(Link { title: t, .. }) => t.write_inline(w, document)?,
             InlineType::Text(s) => write!(w, "{}", html::Encoder(s))?,
             InlineType::Reference(id) => {
                 if let Some(block) = document.get_id(id) {
@@ -217,7 +217,7 @@ impl InlineType {
                 }
             }
             InlineType::Replace(key) => match document.get_replacement(key) {
-                Some(t) => t.write_inline(w, &document)?,
+                Some(t) => t.write_inline(w, document)?,
                 None => {
                     write!(
                         w,
@@ -241,7 +241,7 @@ impl InlineType {
             | InlineType::Bold(t)
             | InlineType::SmallCaps(t)
             | InlineType::Span(t)
-            | InlineType::Link(Link { title: t, .. }) => t.write_inline_plain(w, &document)?,
+            | InlineType::Link(Link { title: t, .. }) => t.write_inline_plain(w, document)?,
             InlineType::Text(s) => write!(w, "{}", html::Encoder(s))?,
             InlineType::Reference(id) => {
                 if let Some(block) = document.get_id(id) {
@@ -257,7 +257,7 @@ impl InlineType {
                 }
             }
             InlineType::Replace(key) => match document.get_replacement(key) {
-                Some(t) => t.write_inline_plain(w, &document)?,
+                Some(t) => t.write_inline_plain(w, document)?,
                 None => write!(w, ":{}:", html::Encoder(key))?,
             },
         }
