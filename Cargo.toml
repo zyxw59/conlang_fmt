@@ -2,7 +2,7 @@
 name = "conlang_fmt"
 version = "1.1.0"
 authors = ["Emily Crandall Fleischman <emilycf@mit.edu>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 failure = "0.1.6"
