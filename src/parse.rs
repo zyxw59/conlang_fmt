@@ -19,49 +19,6 @@ pub struct Block<'a> {
     idx: usize,
 }
 
-/// Update each object `$x` in order with the parameters returned by `$self.parameters()?`.
-///
-/// Uses `$self` to raise appropriate errors.
-///
-/// Panics if no argument in `$x` handles all cases where the parameter name is `None`.
-macro_rules! update_multiple {
-    ( $self:ident, $( $x:expr ),* ) => {
-        {
-            for param in $self.parameters()? {
-                // `update_one!` does the heavy lifting.
-                update_one!($self, param, $( $x ),*);
-            }
-        }
-    }
-}
-
-/// Updates each object `$first, $x..` in order with the parameter `$param`.
-///
-/// If the parameter is returned by `$first`, move on to the first `$x`. If it is returned by
-/// `$last`, raise an error by calling `$self.parameter_error(param.0.unwrap())?`.
-///
-/// Panics if no argument handles all cases where the parameter name is `None`.
-macro_rules! update_one {
-    ( $self:ident, $param:expr, $first: expr, $( $x:expr ),* ) => {
-        {
-            if let Some(param) = $first.update_param($param)? {
-                // if the parameter is returned, try the next argument.
-                update_one!($self, param, $( $x ),*)
-            }
-            // otherwise, we're done.
-        }
-    };
-    ( $self:ident, $param:expr, $last:expr ) => {
-        {
-            if let Some(param) = $last.update_param($param)? {
-                // we can unwrap because `common` will always catch the `None` case
-                // (and treat it as a class).
-                return Err(ErrorKind::Parameter(param.0.unwrap()).into());
-            }
-        }
-    };
-}
-
 impl<'a> Block<'a> {
     pub fn new(slice: &'a [char], start: Option<usize>) -> Block<'a> {
         Block {
@@ -145,7 +102,7 @@ impl<'a> Block<'a> {
     fn parse_toc(&mut self) -> EResult<blocks::Block> {
         let mut toc = blocks::contents::Contents::new();
         let mut common = blocks::BlockCommon::new(self.start.unwrap());
-        update_multiple!(self, toc, common);
+        self.update_multiple(&mut [&mut toc, &mut common])?;
         self.text_rest(&mut toc.title)?;
         Ok(blocks::Block {
             kind: Box::new(toc),
@@ -156,7 +113,7 @@ impl<'a> Block<'a> {
     fn parse_list(&mut self) -> EResult<blocks::Block> {
         let mut list = blocks::list::List::new();
         let mut common = blocks::BlockCommon::new(self.start.unwrap());
-        update_multiple!(self, list, common);
+        self.update_multiple(&mut [&mut list, &mut common])?;
         while self.idx < self.len() {
             let indent = self.skip_whitespace_virtual() - self.idx;
             self.idx += indent + 2;
@@ -174,7 +131,7 @@ impl<'a> Block<'a> {
     fn parse_table(&mut self) -> EResult<blocks::Block> {
         let mut table = blocks::table::Table::new();
         let mut common = blocks::BlockCommon::new(self.start.unwrap());
-        update_multiple!(self, table, common);
+        self.update_multiple(&mut [&mut table, &mut common])?;
         self.text_until_char(&mut table.title, '\n')?;
         // put the newline back on the stack, since it's needed for `match_hard_line`
         self.idx -= 1;
@@ -184,7 +141,7 @@ impl<'a> Block<'a> {
                 // new cell
                 '|' => {
                     let mut col = blocks::table::Column::new();
-                    update_multiple!(self, col);
+                    self.update_multiple(&mut [&mut col])?;
                     table.columns.push(col);
                 }
                 // end of column parameter row
@@ -202,14 +159,14 @@ impl<'a> Block<'a> {
             // skip until after the double colon
             self.idx += 2;
             let mut row = blocks::table::Row::new();
-            update_multiple!(self, row);
+            self.update_multiple(&mut [&mut row])?;
             // match the cells
             while let Some(c) = self.next() {
                 match c {
                     // new cell
                     '|' => {
                         let mut cell = blocks::table::Cell::new();
-                        update_multiple!(self, cell);
+                        self.update_multiple(&mut [&mut cell])?;
                         self.text_until(&mut cell.text, |slf, c| {
                             c == '|' || slf.match_hard_line(c)
                         })?;
@@ -240,7 +197,7 @@ impl<'a> Block<'a> {
     fn parse_gloss(&mut self) -> EResult<blocks::Block> {
         let mut gloss = blocks::gloss::Gloss::new();
         let mut common = blocks::BlockCommon::new(self.start.unwrap());
-        update_multiple!(self, gloss, common);
+        self.update_multiple(&mut [&mut gloss, &mut common])?;
         self.text_until_hard_line(&mut gloss.title)?;
         // now we've matched a hard line; time to start constructing the lines of the
         // gloss
@@ -250,7 +207,7 @@ impl<'a> Block<'a> {
             self.idx += 2;
             let mut class = String::new();
             let mut kind = blocks::gloss::GlossLineType::Split;
-            update_multiple!(self, kind, class);
+            self.update_multiple(&mut [&mut kind, &mut class])?;
             // check whether it's a nosplit:
             match kind {
                 blocks::gloss::GlossLineType::NoSplit => {
@@ -309,7 +266,7 @@ impl<'a> Block<'a> {
     fn parse_replace_block(&mut self) -> EResult<blocks::Block> {
         let mut replacements = blocks::replacements::Replacements::new();
         let mut common = blocks::BlockCommon::new(self.start.unwrap());
-        update_multiple!(self, common);
+        self.update_multiple(&mut [&mut common])?;
         self.skip_whitespace();
         while let Some(':') = self.next() {
             let directive = self.directive()?;
@@ -333,7 +290,7 @@ impl<'a> Block<'a> {
         self.idx -= 1;
         let mut heading = blocks::heading::Heading::new(level);
         let mut common = blocks::BlockCommon::new(self.start.unwrap());
-        update_multiple!(self, heading, common);
+        self.update_multiple(&mut [&mut heading, &mut common])?;
         self.text_rest(&mut heading.title)?;
         Ok(blocks::Block {
             kind: Box::new(heading),
@@ -656,7 +613,7 @@ impl<'a> Block<'a> {
                     // defaults to a class of "conlang"
                     common.class = "conlang".into();
                     // we don't need to update `span`, because it has no parameters of its own
-                    update_multiple!(self, common);
+                    self.update_multiple(&mut [&mut common])?;
                     text.push(text::Inline { kind, common });
                 }
                 // escaped character
@@ -678,8 +635,31 @@ impl<'a> Block<'a> {
 
     fn simple_inline(&mut self, mut kind: text::InlineType) -> EResult<text::Inline> {
         let mut common = text::InlineCommon::new();
-        update_multiple!(self, kind, common);
+        self.update_multiple(&mut [&mut kind, &mut common])?;
         Ok(text::Inline { kind, common })
+    }
+
+    fn update_multiple(&mut self, updateables: &mut [&mut dyn UpdateParam]) -> EResult<()> {
+        for param in self.parameters()? {
+            // `update_one!` does the heavy lifting.
+            self.update_one(param, updateables)?;
+        }
+        Ok(())
+    }
+
+    fn update_one(
+        &mut self,
+        mut param: Parameter,
+        updateables: &mut [&mut dyn UpdateParam],
+    ) -> EResult<()> {
+        for updateable in updateables {
+            if let Some(new_param) = updateable.update_param(param)? {
+                param = new_param;
+            } else {
+                return Ok(());
+            }
+        }
+        Err(ErrorKind::Parameter(param).into())
     }
 
     fn formatting_inline(

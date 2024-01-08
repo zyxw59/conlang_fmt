@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt;
 use std::io::{Result as IoResult, Write};
 
 use crate::document::Document;
@@ -24,8 +24,18 @@ use list::List;
 
 type OResult<T> = EResult<Option<T>>;
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Parameter(pub Option<String>, pub String);
+
+impl fmt::Display for Parameter {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(key) = &self.0 {
+            write!(f, "{key}={}", self.1)
+        } else {
+            f.write_str(&self.1)
+        }
+    }
+}
 
 pub trait UpdateParam {
     /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
@@ -100,7 +110,7 @@ impl UpdateParam for BlockCommon {
     }
 }
 
-pub trait BlockType: Debug {
+pub trait BlockType: fmt::Debug {
     /// Outputs the block.
     fn write(&self, w: &mut dyn Write, common: &BlockCommon, document: &Document) -> IoResult<()>;
 

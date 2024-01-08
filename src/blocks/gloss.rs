@@ -1,6 +1,6 @@
 use std::io::{Result as IoResult, Write};
 
-use crate::blocks::{BlockCommon, BlockType, Parameter};
+use crate::blocks::{BlockCommon, BlockType, Parameter, UpdateParam};
 use crate::document::Document;
 use crate::errors::Result as EResult;
 use crate::html;
@@ -154,9 +154,8 @@ pub enum GlossLineType {
     Split,
 }
 
-impl GlossLineType {
-    /// Updates with the given parameter. If the parameter was not updated, returns the parameter.
-    pub fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
+impl UpdateParam for GlossLineType {
+    fn update_param(&mut self, param: Parameter) -> OResult<Parameter> {
         Ok(match param.0.as_ref() {
             Some(_) => Some(param),
             None => match param.1.as_ref() {

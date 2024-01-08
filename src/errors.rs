@@ -15,7 +15,7 @@ pub enum ErrorKind {
     #[error("Parsing error")]
     Parse,
     #[error("Unknown parameter {0}")]
-    Parameter(String),
+    Parameter(crate::blocks::Parameter),
     #[error("Duplicate ID {0}")]
     Id(String),
     #[error("Duplicate replace directive {0}")]
