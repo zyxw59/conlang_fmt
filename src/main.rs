@@ -25,7 +25,7 @@ fn main_result() -> EResult<()> {
     let mut input = input::Input::new(stdin.lock());
     let mut document: document::Document = Default::default();
     loop {
-        let mut block = input.next_block()?;
+        let block = input.next_block()?;
         if let Some(block) = block.parse()? {
             document.add_block(block)?;
         } else {

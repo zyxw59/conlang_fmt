@@ -56,7 +56,7 @@ macro_rules! update_one {
             if let Some(param) = $last.update_param($param)? {
                 // we can unwrap because `common` will always catch the `None` case
                 // (and treat it as a class).
-                $self.parameter_error(param.0.unwrap())?
+                return Err(ErrorKind::Parameter(param.0.unwrap()).into());
             }
         }
     };
@@ -72,7 +72,12 @@ impl<'a> Block<'a> {
     }
 
     /// Parses the block.
-    pub fn parse(&mut self) -> OResult<blocks::Block> {
+    pub fn parse(mut self) -> OResult<blocks::Block> {
+        self.parse_inner()
+            .with_context(|| ErrorKind::Block(self.start.unwrap()))
+    }
+
+    fn parse_inner(&mut self) -> OResult<blocks::Block> {
         // skip leading whitespace
         self.skip_whitespace();
         // save the position of the first non-whitespace character; if we need to rewind, this is
@@ -187,10 +192,7 @@ impl<'a> Block<'a> {
                 // skip
                 c if c.is_whitespace() => {}
                 // error
-                c => {
-                    return Err(ErrorKind::Expected('|', c))
-                        .context(ErrorKind::Block(self.start.unwrap()));
-                }
+                c => return Err(ErrorKind::Expected('|', c).into()),
             }
         }
         // now we've matched a hard line; time to start constructing the rows of the
@@ -221,10 +223,7 @@ impl<'a> Block<'a> {
                     }
                     '\n' if self.match_hard_line('\n') => break,
                     c if c.is_whitespace() => {}
-                    c => {
-                        return Err(ErrorKind::Expected('|', c))
-                            .context(ErrorKind::Block(self.start.unwrap()));
-                    }
+                    c => return Err(ErrorKind::Expected('|', c).into()),
                 }
             }
             // now push the row and loop
@@ -274,8 +273,7 @@ impl<'a> Block<'a> {
                     // check if we've already entered the postamble; a gloss line here
                     // is an error
                     if !gloss.postamble.is_empty() {
-                        return Err(ErrorKind::GlossLine)
-                            .context(ErrorKind::Block(self.start.unwrap()));
+                        return Err(ErrorKind::GlossLine.into());
                     }
                     let mut line = blocks::gloss::GlossLine::new();
                     line.class = class;
@@ -317,9 +315,7 @@ impl<'a> Block<'a> {
             let directive = self.directive()?;
             let mut text = text::Text::new();
             self.text_until_char(&mut text, '\n')?;
-            replacements
-                .insert(directive, text)
-                .context(ErrorKind::Block(self.start.unwrap()))?;
+            replacements.insert(directive, text)?;
         }
         Ok(blocks::Block {
             kind: Box::new(replacements),
@@ -717,7 +713,7 @@ impl<'a> Block<'a> {
     fn expect(&mut self, expected: char) -> EResult<char> {
         match self.next() {
             Some(c) => Ok(c),
-            None => self.end_of_block(EndOfBlockKind::Expect(expected)),
+            None => Err(ErrorKind::EndOfBlock(EndOfBlockKind::Expect(expected)).into()),
         }
     }
 
@@ -726,7 +722,7 @@ impl<'a> Block<'a> {
     fn expect_escaped(&mut self) -> EResult<char> {
         match self.next() {
             Some(c) => Ok(c),
-            None => self.end_of_block(EndOfBlockKind::Escape),
+            None => Err(ErrorKind::EndOfBlock(EndOfBlockKind::Escape).into()),
         }
     }
 
@@ -735,21 +731,9 @@ impl<'a> Block<'a> {
     fn expect_exact(&mut self, expected: char) -> EResult<()> {
         match self.next() {
             Some(c) if c == expected => Ok(()),
-            Some(c) => {
-                Err(ErrorKind::Expected(expected, c)).context(ErrorKind::Block(self.start.unwrap()))
-            }
-            None => self.end_of_block(EndOfBlockKind::Expect(expected)),
+            Some(c) => Err(ErrorKind::Expected(expected, c).into()),
+            None => Err(ErrorKind::EndOfBlock(EndOfBlockKind::Expect(expected)).into()),
         }
-    }
-
-    /// Returns an `EndOfBlock` error, wrapped in a `Block` error and a `Result`
-    fn end_of_block<T>(&self, kind: EndOfBlockKind) -> EResult<T> {
-        Err(ErrorKind::EndOfBlock(kind)).context(ErrorKind::Block(self.start.unwrap()))
-    }
-
-    /// Returns a `Parameter` error, wrapped in a `Block` error and a `Result`
-    fn parameter_error<T>(&self, parameter: String) -> EResult<T> {
-        Err(ErrorKind::Parameter(parameter)).context(ErrorKind::Block(self.start.unwrap()))
     }
 
     /// Returns the starting line number of the block, which is only defined for non-empty blocks.
@@ -805,16 +789,16 @@ mod tests {
     use super::*;
 
     macro_rules! block {
-        ($id:ident = $str:expr) => {
+        ($id:pat = $str:expr) => {
             let slice = $str.as_bytes();
             let mut input = Input::new(slice);
-            let mut $id = input.next_block().unwrap();
+            let $id = input.next_block().unwrap();
         };
     }
 
     #[test]
     fn block_iter() {
-        block!(block = r#"block 1, line 1"#);
+        block!(mut block = r#"block 1, line 1"#);
         assert_eq!(block.start(), Some(0));
         assert_eq!(block.peek(), Some('b'));
         assert_eq!(block.next(), Some('b'));
@@ -837,25 +821,25 @@ mod tests {
 
     #[test]
     fn parameters_nameless() {
-        block!(block = r#"[nameless]"#);
+        block!(mut block = r#"[nameless]"#);
         assert_eq!(block.parameters().unwrap(), parameters!["nameless"]);
     }
 
     #[test]
     fn parameters_named() {
-        block!(block = r#"[class=foo]"#);
+        block!(mut block = r#"[class=foo]"#);
         assert_eq!(block.parameters().unwrap(), parameters!["class": "foo"]);
     }
 
     #[test]
     fn parameters_space() {
-        block!(block = r#"[ nameless ]"#);
+        block!(mut block = r#"[ nameless ]"#);
         assert_eq!(block.parameters().unwrap(), parameters!["nameless"]);
     }
 
     #[test]
     fn parameters_multiple() {
-        block!(block = r#"[id=foo, class=bar]"#);
+        block!(mut block = r#"[id=foo, class=bar]"#);
         assert_eq!(
             block.parameters().unwrap(),
             parameters!["id": "foo", "class": "bar"]
@@ -864,7 +848,7 @@ mod tests {
 
     #[test]
     fn parameters_none() {
-        block!(block = "0\n::");
+        block!(mut block = "0\n::");
         block.idx += 1;
         assert_eq!(block.parameters().unwrap(), parameters![]);
         assert_eq!(block.next().unwrap(), '\n');
@@ -873,7 +857,7 @@ mod tests {
 
     #[test]
     fn directive() {
-        block!(block = ":foo:x");
+        block!(mut block = ":foo:x");
         block.next();
         assert_eq!(block.directive().unwrap(), "foo");
         assert_eq!(block.next(), Some('x'));
@@ -899,7 +883,7 @@ mod tests {
 
     #[test]
     fn text_emphasis() {
-        block!(block = r#"*emphasis*"#);
+        block!(mut block = r#"*emphasis*"#);
         let mut text = text::Text::new();
         block.text_rest(&mut text).unwrap();
         assert_eq!(text, text!(Emphasis("emphasis"), (" ")))
@@ -907,7 +891,7 @@ mod tests {
 
     #[test]
     fn text_strong() {
-        block!(block = r#"**strong**"#);
+        block!(mut block = r#"**strong**"#);
         let mut text = text::Text::new();
         block.text_rest(&mut text).unwrap();
         assert_eq!(text, text!(Strong("strong"), (" ")))
